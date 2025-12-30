@@ -1,0 +1,17 @@
+[project]
+name = "tech-digest"
+version = "0.1.0"
+description = "Tech digest with Telegram notifications and cron job automation"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.32.3",
+]
+
+[project.optional-dependencies]
+examples = [
+    "beautifulsoup4>=4.13.4",
+]
+
+[project.scripts]
+telegram-setup = "telegram_toolkit.telegram:setup_telegram_bot"
