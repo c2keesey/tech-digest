@@ -39,8 +39,15 @@ if [ ! -x "$UV_PATH" ]; then
     exit 1
 fi
 
+# Build command with optional enrichment
+DIGEST_CMD="$UV_PATH run python digest.py"
+if [ "${ENABLE_ENRICHMENT:-true}" = "true" ]; then
+    DIGEST_CMD="$DIGEST_CMD --enrich"
+    log "Running with web enrichment enabled"
+fi
+
 # Run the digest
-$UV_PATH run python digest.py >> "$LOG_FILE" 2>> "$ERROR_LOG"
+$DIGEST_CMD >> "$LOG_FILE" 2>> "$ERROR_LOG"
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
