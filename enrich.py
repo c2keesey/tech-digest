@@ -7,9 +7,16 @@ context about releases - what people are saying, tips, gotchas, etc.
 """
 
 import subprocess
-import json
 import shutil
 from typing import Optional
+
+# Key accounts to monitor for Claude Code news
+MONITORED_ACCOUNTS = [
+    "@AnthropicAI",      # Anthropic official
+    "@bcherny",          # Boris Cherny, Head of Claude Code
+    "@ClaudeCodeLog",    # Claude Code changelog
+    "@alexalbert__",     # Alex Albert, Claude relations
+]
 
 
 def find_claude_executable() -> Optional[str]:
@@ -26,7 +33,7 @@ def find_claude_executable() -> Optional[str]:
     return None
 
 
-def search_release_context(versions: list[str], timeout: int = 60) -> Optional[str]:
+def search_release_context(versions: list[str], timeout: int = 90) -> Optional[str]:
     """
     Search for community discussion and context about releases.
 
@@ -44,15 +51,24 @@ def search_release_context(versions: list[str], timeout: int = 60) -> Optional[s
 
     # Build the search prompt
     version_str = ", ".join(versions[:3])  # Limit to 3 most recent
-    prompt = f'''Search the web for community discussion about Claude Code {version_str}.
+    accounts_str = ", ".join(MONITORED_ACCOUNTS)
 
-Look for:
-1. Twitter/X posts from @ClaudeCodeLog, @anthropaboris, or developers discussing these versions
-2. Blog posts or articles about notable features
-3. Tips, gotchas, or interesting use cases people have discovered
+    prompt = f'''Search the web for Claude Code news and discussion from the past week.
 
-Return a brief summary (3-5 bullet points max) of the most interesting findings.
+SEARCH FOR:
+1. Recent posts from these key accounts: {accounts_str}
+   - Look for announcements, tips, plugin releases, or feature highlights
+2. Community discussion about Claude Code {version_str}
+3. Any notable blog posts or articles about Claude Code features
+
+PRIORITIZE:
+- Official announcements about new features or plugins
+- Tips and tricks from the Claude Code team
+- Interesting use cases people are sharing
+
+Return a brief summary (4-6 bullet points max) of the most interesting findings.
 Format as plain text bullets starting with "•".
+Include the source (e.g., "@bcherny:") at the start of relevant items.
 If you find nothing notable, just say "No community discussion found."
 Keep it concise - this will be appended to a Telegram message.'''
 
@@ -101,12 +117,16 @@ def format_community_section(context: str) -> str:
     for line in context.split("\n"):
         line = line.strip()
         if line.startswith("•") or line.startswith("-") or line.startswith("*"):
-            # Clean up and truncate
+            # Clean up the bullet
             clean = line.lstrip("•-* ").strip()
-            if len(clean) > 120:
-                clean = clean[:117] + "..."
-            if clean:
-                lines.append(f"  • {clean}")
+            if not clean:
+                continue
+
+            # Handle multi-line items or very long items
+            if len(clean) > 150:
+                clean = clean[:147] + "..."
+
+            lines.append(f"  • {clean}")
 
     # Only return if we have actual content
     if len(lines) > 1:
