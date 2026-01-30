@@ -12,6 +12,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 from telegram_toolkit.telegram import TelegramNotifier
 
+# Optional enrichment import
+try:
+    from enrich import enrich_digest
+    ENRICHMENT_AVAILABLE = True
+except ImportError:
+    ENRICHMENT_AVAILABLE = False
+
 
 GITHUB_RELEASES_URL = "https://api.github.com/repos/anthropics/claude-code/releases"
 
@@ -222,12 +229,13 @@ def generate_summary(releases: list[dict], all_changes: list[str]) -> str:
     return f"Claude Code {version_text} • {len(all_changes)} changes"
 
 
-def format_digest(releases: list[dict]) -> str:
+def format_digest(releases: list[dict], enrichment: str = "") -> str:
     """
     Format releases into a readable Telegram digest.
 
     Args:
         releases: List of release dictionaries
+        enrichment: Optional community context section
 
     Returns:
         Formatted digest string
@@ -304,6 +312,10 @@ def format_digest(releases: list[dict]) -> str:
                 lines.append(f"  _...and {hidden} more_")
             lines.append("")
 
+    # Community context (if enrichment enabled)
+    if enrichment:
+        lines.append(enrichment.rstrip())
+
     # Footer
     latest = releases[0]
     lines.append(f"[View on GitHub]({latest['html_url']})")
@@ -311,13 +323,14 @@ def format_digest(releases: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def send_digest(days: int = 7, quiet: bool = False) -> bool:
+def send_digest(days: int = 7, quiet: bool = False, enrich: bool = False) -> bool:
     """
     Fetch releases and send digest via Telegram.
 
     Args:
         days: Look back N days for releases
         quiet: Suppress preview output
+        enrich: Enable web context enrichment via Claude
 
     Returns:
         True if successful
@@ -330,7 +343,13 @@ def send_digest(days: int = 7, quiet: bool = False) -> bool:
     if not quiet:
         print(f"Found {len(releases)} release(s)")
 
-    digest = format_digest(releases)
+    # Optional enrichment
+    enrichment = ""
+    if enrich and releases and ENRICHMENT_AVAILABLE:
+        versions = [r["tag_name"] for r in releases[:3]]
+        enrichment = enrich_digest(versions)
+
+    digest = format_digest(releases, enrichment)
 
     if not quiet:
         print("\n--- Digest Preview ---")
@@ -371,18 +390,25 @@ def send_digest(days: int = 7, quiet: bool = False) -> bool:
         return False
 
 
-def preview_digest(days: int = 7) -> str:
+def preview_digest(days: int = 7, enrich: bool = False) -> str:
     """
     Generate and return digest without sending.
 
     Args:
         days: Look back N days for releases
+        enrich: Enable web context enrichment
 
     Returns:
         Formatted digest string
     """
     releases = fetch_releases(days=days)
-    return format_digest(releases)
+
+    enrichment = ""
+    if enrich and releases and ENRICHMENT_AVAILABLE:
+        versions = [r["tag_name"] for r in releases[:3]]
+        enrichment = enrich_digest(versions)
+
+    return format_digest(releases, enrichment)
 
 
 def main():
@@ -391,6 +417,7 @@ def main():
 
     days = 7
     preview_only = "--preview" in sys.argv
+    enrich = "--enrich" in sys.argv
 
     if "--days" in sys.argv:
         idx = sys.argv.index("--days")
@@ -405,13 +432,14 @@ def main():
         print("Options:")
         print("  --preview     Show digest without sending to Telegram")
         print("  --days N      Look back N days for releases (default: 7)")
+        print("  --enrich      Add community context via Claude web search")
         print("  --help, -h    Show this help message")
         return
 
     if preview_only:
-        print(preview_digest(days))
+        print(preview_digest(days, enrich=enrich))
     else:
-        success = send_digest(days)
+        success = send_digest(days, enrich=enrich)
         sys.exit(0 if success else 1)
 
 
