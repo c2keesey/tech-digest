@@ -24,6 +24,14 @@ GITHUB_RELEASES_URL = "https://api.github.com/repos/anthropics/claude-code/relea
 
 # Category patterns for sorting changes (checked in order, first match wins)
 # Using tuples of (category, patterns) to maintain order
+def escape_markdown(text: str) -> str:
+    """Escape Telegram markdown special characters."""
+    # Escape underscores, asterisks, brackets, backticks
+    for char in ['_', '*', '[', ']', '`']:
+        text = text.replace(char, '\\' + char)
+    return text
+
+
 CATEGORY_RULES = [
     # Bug fixes first - these often contain other keywords like "add" or "improve"
     ("Bug Fixes", [r"^fix", r"\bfixed\b", r"\bfix\b", r"\bresolve", r"\bpatch\b"]),
@@ -266,7 +274,7 @@ def format_digest(releases: list[dict], enrichment: str = "") -> str:
     if try_this:
         lines.append("🎯 *Try This*")
         for item in try_this:
-            lines.append(f"  → {item}")
+            lines.append(f"  → {escape_markdown(item)}")
         lines.append("")
 
     # Category order for display
@@ -307,7 +315,7 @@ def format_digest(releases: list[dict], enrichment: str = "") -> str:
                 # Truncate long changes
                 if len(change) > 100:
                     change = change[:97] + "..."
-                lines.append(f"  • {change}")
+                lines.append(f"  • {escape_markdown(change)}")
             if hidden > 0:
                 lines.append(f"  _...and {hidden} more_")
             lines.append("")
