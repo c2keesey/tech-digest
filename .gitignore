@@ -30,3 +30,6 @@ Thumbs.db
 # Logs and environment
 logs/
 .env
+
+# Bot state
+.bot_offset
