@@ -5,6 +5,7 @@ description = "Tech digest with Telegram notifications and cron job automation"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+    "beautifulsoup4>=4.14.3",
     "requests>=2.32.3",
 ]
 
