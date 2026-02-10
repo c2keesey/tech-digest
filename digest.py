@@ -41,11 +41,9 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def escape_markdown(text: str) -> str:
-    """Escape Telegram markdown special characters."""
-    for char in ['_', '*', '[', ']', '`']:
-        text = text.replace(char, '\\' + char)
-    return text
+def escape_html(text: str) -> str:
+    """Escape HTML special characters for Telegram."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def find_claude_executable() -> Optional[str]:
@@ -119,25 +117,26 @@ def parse_with_claude(content: str, timeout: int = 60) -> Optional[dict]:
 
 
 def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
-    """Format a single source's releases into digest section."""
-    lines = [f"*{data.source_name}*"]
+    """Format a single source's releases into a Telegram HTML section."""
+    lines = [f"▎<b>{escape_html(data.source_name)}</b>"]
 
     if not parsed:
-        lines.append("  _No recent updates or failed to parse_")
+        lines.append("<i>No recent updates</i>")
         return "\n".join(lines)
 
-    # Summary
+    # Summary line
     summary = parsed.get("summary", "")
     if summary:
-        lines[0] = f"*{data.source_name}* — {summary}"
+        lines.append(f"<i>{escape_html(summary)}</i>")
 
     # Try This (only show if present)
     try_this = parsed.get("try_this", [])
     if try_this:
-        for item in try_this[:2]:  # Limit to 2 per source
-            lines.append(f"  🎯 {escape_markdown(item)}")
+        lines.append("")
+        for item in try_this[:2]:
+            lines.append(f"  🎯 {escape_html(item)}")
 
-    # Categories - show condensed
+    # Categories
     category_config = [
         ("New Features", "✨"),
         ("Improvements", "📈"),
@@ -146,32 +145,37 @@ def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
     ]
 
     categories = parsed.get("categories", {})
-    max_items = 4  # Limit items per source to keep digest readable
+    max_items = 4
 
     items_shown = 0
+    category_lines = []
     for category, emoji in category_config:
         items = categories.get(category, [])
         if not items:
             continue
 
-        for change in items[:2]:  # Max 2 per category
+        for change in items[:2]:
             if items_shown >= max_items:
                 break
             if len(change) > 80:
                 change = change[:77] + "..."
-            lines.append(f"  {emoji} {escape_markdown(change)}")
+            category_lines.append(f"  {emoji} {escape_html(change)}")
             items_shown += 1
 
         if items_shown >= max_items:
             break
 
-    # Count remaining items
+    if category_lines:
+        lines.append("")
+        lines.extend(category_lines)
+
+    # Remaining count
     total_items = sum(len(v) for v in categories.values())
     if total_items > items_shown:
         remaining = total_items - items_shown
-        lines.append(f"  _+{remaining} more_")
+        lines.append(f"  <i>+{remaining} more</i>")
 
-    lines.append(f"  [View changelog]({data.url})")
+    lines.append(f'\n  <a href="{data.url}">View changelog →</a>')
 
     return "\n".join(lines)
 
@@ -194,8 +198,7 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
     new_state = {k: dict(v) for k, v in state.items()}  # deep-ish copy
 
     lines = [
-        "☀️ *Tech Morning Digest*",
-        "",
+        "☀️ <b>Tech Morning Digest</b>",
     ]
 
     sections = []
@@ -277,7 +280,7 @@ def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
         payload = {
             'chat_id': notifier.chat_id,
             'text': digest,
-            'parse_mode': 'Markdown',
+            'parse_mode': 'HTML',
             'disable_web_page_preview': True,
             'disable_notification': False
         }
