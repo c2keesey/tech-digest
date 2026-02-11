@@ -145,35 +145,26 @@ def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
     ]
 
     categories = parsed.get("categories", {})
-    max_items = 4
 
-    items_shown = 0
     category_lines = []
     for category, emoji in category_config:
         items = categories.get(category, [])
         if not items:
             continue
 
-        for change in items[:2]:
-            if items_shown >= max_items:
-                break
+        # Summarize bug fixes into a count instead of listing each one
+        if category == "Bug Fixes":
+            category_lines.append(f"  {emoji} {len(items)} bug fix{'es' if len(items) != 1 else ''}")
+            continue
+
+        for change in items:
             if len(change) > 80:
                 change = change[:77] + "..."
             category_lines.append(f"  {emoji} {escape_html(change)}")
-            items_shown += 1
-
-        if items_shown >= max_items:
-            break
 
     if category_lines:
         lines.append("")
         lines.extend(category_lines)
-
-    # Remaining count
-    total_items = sum(len(v) for v in categories.values())
-    if total_items > items_shown:
-        remaining = total_items - items_shown
-        lines.append(f"  <i>+{remaining} more</i>")
 
     lines.append(f'\n  <a href="{data.url}">View changelog →</a>')
 
