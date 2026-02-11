@@ -262,22 +262,30 @@ def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
 
     try:
         notifier = TelegramNotifier()
-
-        # Telegram has 4096 char limit
-        if len(digest) > 4000:
-            digest = digest[:3997] + "..."
-
         api_url = f"https://api.telegram.org/bot{notifier.bot_token}/sendMessage"
-        payload = {
-            'chat_id': notifier.chat_id,
-            'text': digest,
-            'parse_mode': 'HTML',
-            'disable_web_page_preview': True,
-            'disable_notification': False
-        }
 
-        response = requests.post(api_url, json=payload, timeout=10)
-        response.raise_for_status()
+        # Split digest into chunks that fit Telegram's 4096 char limit
+        # Split on source boundaries (each source starts with ▎)
+        header, *source_sections = digest.split("\n\n▎")
+        chunks = [header]
+        for section in source_sections:
+            section = "▎" + section
+            # If adding this section would exceed limit, start a new chunk
+            if len(chunks[-1]) + len("\n\n") + len(section) > 4000:
+                chunks.append(section)
+            else:
+                chunks[-1] += "\n\n" + section
+
+        for chunk in chunks:
+            payload = {
+                'chat_id': notifier.chat_id,
+                'text': chunk,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True,
+                'disable_notification': False
+            }
+            response = requests.post(api_url, json=payload, timeout=10)
+            response.raise_for_status()
 
         # Only save state after successful send
         save_state(new_state)
