@@ -21,6 +21,7 @@ from telegram_toolkit.telegram import TelegramNotifier
 
 REPO_DIR = Path(__file__).parent
 OFFSET_FILE = REPO_DIR / ".bot_offset"
+SESSION_FILE = REPO_DIR / ".bot_session"
 POLL_TIMEOUT = 30
 CLAUDE_TIMEOUT = 300
 MAX_MSG_LEN = 3900
@@ -65,6 +66,28 @@ def save_offset(offset):
     OFFSET_FILE.write_text(str(offset))
 
 
+def load_session_id():
+    """Load persisted Claude session ID."""
+    if SESSION_FILE.exists():
+        try:
+            return SESSION_FILE.read_text().strip()
+        except OSError:
+            pass
+    return None
+
+
+def save_session_id(session_id):
+    """Persist Claude session ID for conversation continuity."""
+    SESSION_FILE.write_text(session_id)
+
+
+def clear_session():
+    """Clear the persisted session to start a fresh conversation."""
+    if SESSION_FILE.exists():
+        SESSION_FILE.unlink()
+    return None
+
+
 def send_message(bot_token, chat_id, text):
     """Send a message to Telegram, chunking if needed."""
     import requests
@@ -106,16 +129,26 @@ def get_updates(bot_token, offset):
     return resp.json().get("result", [])
 
 
-def run_claude(message_text):
-    """Run Claude CLI with the user's message and return response."""
+def run_claude(message_text, session_id=None):
+    """Run Claude CLI with the user's message, resuming the session if possible.
+
+    Returns (response_text, session_id).
+    """
     claude_path = find_claude_executable()
     if not claude_path:
-        return "Error: Claude CLI not found on this machine."
+        return "Error: Claude CLI not found on this machine.", session_id
 
-    prompt = f"{CONTEXT_PREFIX}\n\nUser request: {message_text}"
+    cmd = [claude_path, "-p", message_text, "--dangerously-skip-permissions", "--output-format", "json"]
+
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    else:
+        # First message in conversation — include the system prompt
+        cmd.extend(["--system-prompt", CONTEXT_PREFIX])
+
     try:
         result = subprocess.run(
-            [claude_path, "-p", prompt, "--dangerously-skip-permissions", "--output-format", "text"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT,
@@ -123,12 +156,20 @@ def run_claude(message_text):
             env={**os.environ, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
         )
         if result.returncode != 0:
-            return f"Claude failed (exit {result.returncode}):\n{result.stderr[-500:]}"
-        return result.stdout.strip()
+            return f"Claude failed (exit {result.returncode}):\n{result.stderr[-500:]}", session_id
+
+        try:
+            data = json.loads(result.stdout)
+            new_session_id = data.get("session_id", session_id)
+            response_text = data.get("result", result.stdout.strip())
+            return response_text, new_session_id
+        except json.JSONDecodeError:
+            return result.stdout.strip(), session_id
+
     except subprocess.TimeoutExpired:
-        return f"Claude timed out after {CLAUDE_TIMEOUT}s."
+        return f"Claude timed out after {CLAUDE_TIMEOUT}s.", session_id
     except Exception as e:
-        return f"Claude error: {e}"
+        return f"Claude error: {e}", session_id
 
 
 def git_changes():
@@ -169,14 +210,23 @@ def git_commit_and_push(user_message):
 
 def handle_message(bot_token, chat_id, message_text):
     """Process a single user message: run Claude, commit changes, report back."""
+    # Handle /reset command
+    if message_text.strip().lower() == "/reset":
+        clear_session()
+        send_message(bot_token, chat_id, "Session cleared. Next message starts a fresh conversation.")
+        return
+
     send_message(bot_token, chat_id, "Processing...")
 
-    response = run_claude(message_text)
+    session_id = load_session_id()
+    response, new_session_id = run_claude(message_text, session_id)
+
+    if new_session_id and new_session_id != session_id:
+        save_session_id(new_session_id)
 
     changes = git_changes()
     if changes:
         pushed, push_err = git_commit_and_push(message_text)
-        # Re-check diff stat after staging for a cleaner summary
         diff_result = subprocess.run(
             ["git", "log", "-1", "--stat", "--format="],
             capture_output=True, text=True, cwd=str(REPO_DIR),

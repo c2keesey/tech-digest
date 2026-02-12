@@ -33,3 +33,4 @@ logs/
 
 # Bot state
 .bot_offset
+.bot_session
