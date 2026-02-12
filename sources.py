@@ -56,6 +56,10 @@ WEB_SOURCES = {
         "url": "https://www.granola.ai/docs/changelog",
         "name": "Granola",
     },
+    "claude-app": {
+        "url": "https://support.claude.com/en/articles/12138966-release-notes",
+        "name": "Claude App",
+    },
 }
 
 
