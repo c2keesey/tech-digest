@@ -60,6 +60,10 @@ WEB_SOURCES = {
         "url": "https://support.claude.com/en/articles/12138966-release-notes",
         "name": "Claude App",
     },
+    "chatgpt-app": {
+        "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes",
+        "name": "ChatGPT App",
+    },
 }
 
 
