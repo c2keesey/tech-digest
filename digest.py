@@ -264,17 +264,15 @@ def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
         notifier = TelegramNotifier()
         api_url = f"https://api.telegram.org/bot{notifier.bot_token}/sendMessage"
 
-        # Split digest into chunks that fit Telegram's 4096 char limit
-        # Split on source boundaries (each source starts with ▎)
-        header, *source_sections = digest.split("\n\n▎")
-        chunks = [header]
-        for section in source_sections:
-            section = "▎" + section
-            # If adding this section would exceed limit, start a new chunk
-            if len(chunks[-1]) + len("\n\n") + len(section) > 4000:
-                chunks.append(section)
-            else:
-                chunks[-1] += "\n\n" + section
+        # If digest fits in one message, send as-is.
+        # Otherwise, break up by repo: header first, then each repo separately.
+        if len(digest) <= 4000:
+            chunks = [digest]
+        else:
+            header, *source_sections = digest.split("\n\n▎")
+            chunks = [header]
+            for section in source_sections:
+                chunks.append("▎" + section)
 
         for chunk in chunks:
             payload = {
