@@ -138,13 +138,17 @@ def run_claude(message_text, session_id=None):
     if not claude_path:
         return "Error: Claude CLI not found on this machine.", session_id
 
-    cmd = [claude_path, "-p", message_text, "--dangerously-skip-permissions", "--output-format", "json"]
+    if session_id:
+        # Resume existing conversation — send bare message
+        prompt = message_text
+    else:
+        # First message — prepend repo context
+        prompt = f"{CONTEXT_PREFIX}\n\nUser request: {message_text}"
+
+    cmd = [claude_path, "-p", prompt, "--dangerously-skip-permissions", "--output-format", "json"]
 
     if session_id:
         cmd.extend(["--resume", session_id])
-    else:
-        # First message in conversation — include the system prompt
-        cmd.extend(["--system-prompt", CONTEXT_PREFIX])
 
     try:
         result = subprocess.run(
