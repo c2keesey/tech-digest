@@ -70,15 +70,19 @@ def load_session_id():
     """Load persisted Claude session ID."""
     if SESSION_FILE.exists():
         try:
-            return SESSION_FILE.read_text().strip()
+            sid = SESSION_FILE.read_text().strip()
+            print(f"Loaded session: {sid}")
+            return sid
         except OSError:
             pass
+    print("No existing session")
     return None
 
 
 def save_session_id(session_id):
     """Persist Claude session ID for conversation continuity."""
     SESSION_FILE.write_text(session_id)
+    print(f"Saved session: {session_id}")
 
 
 def clear_session():
@@ -129,6 +133,45 @@ def get_updates(bot_token, offset):
     return resp.json().get("result", [])
 
 
+def _build_claude_cmd(claude_path, message_text, session_id=None):
+    """Build the claude CLI command list."""
+    cmd = [
+        claude_path, "-p", message_text,
+        "--dangerously-skip-permissions",
+        "--output-format", "json",
+        "--model", "sonnet",
+    ]
+
+    if session_id:
+        # Resume existing session — system prompt is already in the session
+        cmd.extend(["--resume", session_id])
+    else:
+        # New session — set the system prompt
+        cmd.extend(["--system-prompt", CONTEXT_PREFIX])
+
+    return cmd
+
+
+def _run_claude_once(cmd):
+    """Execute a claude CLI command. Returns (data_dict, error_string)."""
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=CLAUDE_TIMEOUT,
+        cwd=str(REPO_DIR),
+        env={**os.environ, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
+    )
+    if result.returncode != 0:
+        return None, f"Claude failed (exit {result.returncode}):\n{result.stderr[-500:]}"
+
+    try:
+        data = json.loads(result.stdout)
+        return data, None
+    except json.JSONDecodeError:
+        return None, result.stdout.strip()
+
+
 def run_claude(message_text, session_id=None):
     """Run Claude CLI with the user's message, resuming the session if possible.
 
@@ -136,37 +179,27 @@ def run_claude(message_text, session_id=None):
     """
     claude_path = find_claude_executable()
     if not claude_path:
-        return "Error: Claude CLI not found on this machine.", session_id
+        return "Error: Claude CLI not found on this machine.", None
 
-    cmd = [
-        claude_path, "-p", message_text,
-        "--dangerously-skip-permissions",
-        "--output-format", "json",
-        "--system-prompt", CONTEXT_PREFIX,
-    ]
-
-    if session_id:
-        cmd.extend(["--resume", session_id])
+    cmd = _build_claude_cmd(claude_path, message_text, session_id)
+    print(f"Claude cmd: resume={session_id is not None} session={session_id}")
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=CLAUDE_TIMEOUT,
-            cwd=str(REPO_DIR),
-            env={**os.environ, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
-        )
-        if result.returncode != 0:
-            return f"Claude failed (exit {result.returncode}):\n{result.stderr[-500:]}", session_id
+        data, error = _run_claude_once(cmd)
 
-        try:
-            data = json.loads(result.stdout)
-            new_session_id = data.get("session_id", session_id)
-            response_text = data.get("result", result.stdout.strip())
-            return response_text, new_session_id
-        except json.JSONDecodeError:
-            return result.stdout.strip(), session_id
+        # If resume failed, retry without resume (start fresh session)
+        if error and session_id:
+            print(f"Resume failed, starting fresh session: {error[:100]}")
+            cmd = _build_claude_cmd(claude_path, message_text, session_id=None)
+            data, error = _run_claude_once(cmd)
+
+        if error:
+            return error, session_id
+
+        new_session_id = data.get("session_id", session_id)
+        response_text = data.get("result", "")
+        print(f"Claude response OK, session={new_session_id}")
+        return response_text, new_session_id
 
     except subprocess.TimeoutExpired:
         return f"Claude timed out after {CLAUDE_TIMEOUT}s.", session_id
