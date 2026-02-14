@@ -40,6 +40,11 @@ GITHUB_SOURCES = {
         "name": "Agent Deck",
         "url": "https://github.com/asheshgoplani/agent-deck/releases",
     },
+    "beads": {
+        "repo": "steveyegge/beads",
+        "name": "Beads",
+        "url": "https://github.com/steveyegge/beads/releases",
+    },
 }
 
 # Web changelog sources (HTML pages)
