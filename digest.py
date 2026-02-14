@@ -20,7 +20,7 @@ PROMPT_FILE = Path(__file__).parent / "prompts" / "parse-release.md"
 STATE_FILE = Path(__file__).parent / "state.json"
 
 # Default sources to include in digest
-DEFAULT_SOURCES = ["claude-code", "cursor", "linear", "pydantic-ai", "granola", "agent-deck"]
+DEFAULT_SOURCES = ["claude-code", "cursor", "linear", "pydantic-ai", "granola", "agent-deck", "beads"]
 
 # Cap stored versions per source to prevent unbounded growth
 MAX_STORED_VERSIONS = 50
