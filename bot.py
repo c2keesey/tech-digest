@@ -139,7 +139,7 @@ def _build_claude_cmd(claude_path, message_text, session_id=None):
         claude_path, "-p", message_text,
         "--dangerously-skip-permissions",
         "--output-format", "json",
-        "--model", "sonnet",
+        "--model", "opus",
     ]
 
     if session_id:
