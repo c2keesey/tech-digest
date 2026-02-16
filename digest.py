@@ -1,363 +1,259 @@
 #!/usr/bin/env python3
 """
-Claude Code Release Digest
+Tech Release Digest
 
-Fetches Claude Code release notes from GitHub and sends a formatted
-morning digest via Telegram.
+Fetches release notes from multiple sources and sends a formatted
+morning digest via Telegram. Uses Claude to parse and categorize changes.
 """
 
-import re
-import requests
-from datetime import datetime, timedelta
+import json
+import subprocess
+import shutil
+from pathlib import Path
 from typing import Optional
 from telegram_toolkit.telegram import TelegramNotifier
+import requests
 
-# Optional enrichment import
-try:
-    from enrich import enrich_digest
-    ENRICHMENT_AVAILABLE = True
-except ImportError:
-    ENRICHMENT_AVAILABLE = False
+from sources import get_release_data, list_sources, ReleaseData
 
+PROMPT_FILE = Path(__file__).parent / "prompts" / "parse-release.md"
+STATE_FILE = Path(__file__).parent / "state.json"
 
-GITHUB_RELEASES_URL = "https://api.github.com/repos/anthropics/claude-code/releases"
+# Default sources to include in digest
+DEFAULT_SOURCES = ["claude-code", "cursor", "linear", "pydantic-ai", "granola", "agent-deck", "beads"]
 
-# Category patterns for sorting changes (checked in order, first match wins)
-# Using tuples of (category, patterns) to maintain order
-def escape_markdown(text: str) -> str:
-    """Escape Telegram markdown special characters."""
-    # Escape underscores, asterisks, brackets, backticks
-    for char in ['_', '*', '[', ']', '`']:
-        text = text.replace(char, '\\' + char)
-    return text
+# Cap stored versions per source to prevent unbounded growth
+MAX_STORED_VERSIONS = 50
 
 
-CATEGORY_RULES = [
-    # Bug fixes first - these often contain other keywords like "add" or "improve"
-    ("Bug Fixes", [r"^fix", r"\bfixed\b", r"\bfix\b", r"\bresolve", r"\bpatch\b"]),
-    # IDE-specific changes
-    ("IDE & Editor", [r"\[vscode\]", r"\[ide\]", r"\bvscode\b", r"\bvim\b", r"\bneovim\b", r"\bjetbrains\b"]),
-    # Performance
-    ("Performance", [r"\bperformance\b", r"\bfaster\b", r"\bspeed\b", r"\bmemory\b", r"\boptimiz"]),
-    # New features - things that are added
-    ("New Features", [r"^added?\b", r"^new\b", r"\bintroduce", r"^enabled?\b", r"^implement"]),
-    # Improvements - enhancements to existing features
-    ("Improvements", [r"^improved?\b", r"^enhanced?\b", r"^updated?\b", r"^better\b", r"^refactor"]),
-    # Documentation
-    ("Documentation", [r"\bdoc\b", r"\breadme\b", r"\bguide\b", r"\btutorial\b"]),
-    # Changes (behavioral changes)
-    ("Changes", [r"^changed?\b"]),
-]
+def load_state() -> dict:
+    """Load version tracking state from disk."""
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
 
 
-def fetch_releases(days: int = 7, limit: int = 10) -> list[dict]:
+def save_state(state: dict):
+    """Save version tracking state to disk."""
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def escape_html(text: str) -> str:
+    """Escape HTML special characters for Telegram."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def find_claude_executable() -> Optional[str]:
+    """Find the claude CLI executable."""
+    paths = [
+        shutil.which("claude"),
+        "/usr/local/bin/claude",
+        f"{subprocess.os.environ.get('HOME', '')}/.local/bin/claude",
+    ]
+    for path in paths:
+        if path and subprocess.os.path.exists(path):
+            return path
+    return None
+
+
+def parse_with_claude(content: str, timeout: int = 60) -> Optional[dict]:
     """
-    Fetch recent Claude Code releases from GitHub.
+    Parse release content using Claude CLI.
 
     Args:
-        days: Only include releases from the last N days
-        limit: Maximum number of releases to fetch
+        content: Raw release/changelog content
+        timeout: Max seconds to wait
 
     Returns:
-        List of release dictionaries
+        Parsed structure or None if failed
     """
+    claude_path = find_claude_executable()
+    if not claude_path:
+        print("Claude CLI not found")
+        return None
+
+    if not PROMPT_FILE.exists():
+        print(f"Prompt file not found: {PROMPT_FILE}")
+        return None
+
+    prompt = PROMPT_FILE.read_text()
+
     try:
-        response = requests.get(
-            GITHUB_RELEASES_URL,
-            params={"per_page": limit},
-            headers={"Accept": "application/vnd.github+json"},
-            timeout=30
+        result = subprocess.run(
+            [claude_path, "-p", prompt, "--output-format", "text"],
+            input=content,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={**subprocess.os.environ, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
         )
-        response.raise_for_status()
-        releases = response.json()
 
-        # Filter to recent releases
-        cutoff = datetime.now() - timedelta(days=days)
-        recent = []
-        for release in releases:
-            published = datetime.fromisoformat(release["published_at"].replace("Z", "+00:00"))
-            if published.replace(tzinfo=None) > cutoff:
-                recent.append(release)
+        if result.returncode != 0:
+            print(f"Claude parse failed: {result.stderr}")
+            return None
 
-        return recent
-    except requests.RequestException as e:
-        print(f"Failed to fetch releases: {e}")
-        return []
+        output = result.stdout.strip()
 
+        # Strip markdown fences if present
+        if output.startswith("```"):
+            lines = output.split("\n")
+            lines = [l for l in lines if not l.startswith("```")]
+            output = "\n".join(lines)
 
-def parse_changes(body: str) -> list[str]:
-    """
-    Extract individual changes from release body.
+        return json.loads(output)
 
-    Args:
-        body: Markdown body of release notes
-
-    Returns:
-        List of change descriptions
-    """
-    if not body:
-        return []
-
-    changes = []
-    lines = body.split("\n")
-
-    for line in lines:
-        # Match bullet points (-, *, or numbered)
-        line = line.strip()
-        if re.match(r'^[-*]|\d+\.', line):
-            # Clean up the line
-            change = re.sub(r'^[-*]\s*|\d+\.\s*', '', line).strip()
-            if change and len(change) > 5:  # Skip empty or too short
-                changes.append(change)
-
-    return changes
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON: {e}")
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"Claude parse timed out after {timeout}s")
+        return None
+    except Exception as e:
+        print(f"Claude parse error: {e}")
+        return None
 
 
-def categorize_change(change: str) -> str:
-    """
-    Categorize a change based on regex patterns.
+def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
+    """Format a single source's releases into a Telegram HTML section."""
+    lines = [f"▎<b>{escape_html(data.source_name)}</b>"]
 
-    Args:
-        change: Change description
+    if not parsed:
+        lines.append("<i>No recent updates</i>")
+        return "\n".join(lines)
 
-    Returns:
-        Category name
-    """
-    change_lower = change.lower()
+    # Summary line
+    summary = parsed.get("summary", "")
+    if summary:
+        lines.append(f"<i>{escape_html(summary)}</i>")
 
-    for category, patterns in CATEGORY_RULES:
-        for pattern in patterns:
-            if re.search(pattern, change_lower):
-                return category
-
-    return "Other Changes"
-
-
-def categorize_changes(changes: list[str]) -> dict[str, list[str]]:
-    """
-    Sort changes into categories.
-
-    Args:
-        changes: List of change descriptions
-
-    Returns:
-        Dictionary of category -> list of changes
-    """
-    categorized = {}
-
-    for change in changes:
-        category = categorize_change(change)
-        if category not in categorized:
-            categorized[category] = []
-        categorized[category].append(change)
-
-    return categorized
-
-
-def identify_try_this(changes: list[str]) -> list[str]:
-    """
-    Identify features worth trying out.
-
-    Args:
-        changes: List of change descriptions
-
-    Returns:
-        List of notable features to try
-    """
-    # Look for actionable user-facing features
-    try_patterns = [
-        r"\bshortcut\b",
-        r"\bcommand\b",
-        r"\bsetting\b",
-        r"\bmode\b",
-        r"\bautocomplete\b",
-        r"\bnavigation\b",
-        r"ctrl\+",
-        r"cmd\+",
-    ]
-
-    # Things to skip - internal, IDE-specific, or not actionable
-    skip_patterns = [
-        r"^fix",
-        r"\binternal\b",
-        r"\brefactor",
-        r"\btypo\b",
-        r"\[sdk\]",
-        r"\[ide\]",
-        r"\bdeprecation\b",
-    ]
-
-    notable = []
-    for change in changes:
-        change_lower = change.lower()
-
-        # Skip excluded items
-        if any(re.search(p, change_lower) for p in skip_patterns):
-            continue
-
-        # Must start with "Added" or "Changed" to be actionable
-        if not re.match(r"^(added?|changed?)\b", change_lower):
-            continue
-
-        # Prefer items with try-worthy keywords
-        if any(re.search(p, change_lower) for p in try_patterns):
-            notable.insert(0, change)  # Prioritize
-        else:
-            notable.append(change)
-
-    # Return top 3, truncating long items
-    result = []
-    for item in notable[:3]:
-        if len(item) > 80:
-            item = item[:77] + "..."
-        result.append(item)
-    return result
-
-
-def generate_summary(releases: list[dict], all_changes: list[str]) -> str:
-    """
-    Generate a top-line summary.
-
-    Args:
-        releases: List of releases
-        all_changes: All changes across releases
-
-    Returns:
-        Summary string
-    """
-    if not releases:
-        return "No new Claude Code releases this week."
-
-    versions = [r["tag_name"] for r in releases]
-    if len(versions) == 1:
-        version_text = f"version {versions[0]}"
-    else:
-        version_text = f"versions {versions[-1]} → {versions[0]}"
-
-    return f"Claude Code {version_text} • {len(all_changes)} changes"
-
-
-def format_digest(releases: list[dict], enrichment: str = "") -> str:
-    """
-    Format releases into a readable Telegram digest.
-
-    Args:
-        releases: List of release dictionaries
-        enrichment: Optional community context section
-
-    Returns:
-        Formatted digest string
-    """
-    if not releases:
-        return "☀️ *Claude Code Morning Digest*\n\nNo new releases in the past week. You're all caught up!"
-
-    # Collect all changes
-    all_changes = []
-    for release in releases:
-        changes = parse_changes(release.get("body", ""))
-        all_changes.extend(changes)
-
-    # Generate components
-    summary = generate_summary(releases, all_changes)
-    categorized = categorize_changes(all_changes)
-    try_this = identify_try_this(all_changes)
-
-    # Build the digest
-    lines = [
-        "☀️ *Claude Code Morning Digest*",
-        "",
-        f"📌 {summary}",
-        "",
-    ]
-
-    # Try This section (if any notable features)
+    # Try This (only show if present)
+    try_this = parsed.get("try_this", [])
     if try_this:
-        lines.append("🎯 *Try This*")
-        for item in try_this:
-            lines.append(f"  → {escape_markdown(item)}")
         lines.append("")
+        for item in try_this[:2]:
+            lines.append(f"  🎯 {escape_html(item)}")
 
-    # Category order for display
-    category_order = [
-        "New Features",
-        "Improvements",
-        "IDE & Editor",
-        "Performance",
-        "Bug Fixes",
-        "Changes",
-        "Documentation",
-        "Other Changes",
+    # Categories
+    category_config = [
+        ("New Features", "✨"),
+        ("Improvements", "📈"),
+        ("Bug Fixes", "🐛"),
+        ("Changes", "🔄"),
     ]
 
-    emoji_map = {
-        "New Features": "✨",
-        "Bug Fixes": "🐛",
-        "Improvements": "📈",
-        "IDE & Editor": "🖥️",
-        "Performance": "⚡",
-        "Documentation": "📚",
-        "Changes": "🔄",
-        "Other Changes": "📝",
-    }
+    categories = parsed.get("categories", {})
 
-    # Categorized changes (limit per category for readability)
-    max_per_category = 8
+    category_lines = []
+    for category, emoji in category_config:
+        items = categories.get(category, [])
+        if not items:
+            continue
 
-    for category in category_order:
-        if category in categorized:
-            emoji = emoji_map.get(category, "•")
-            items = categorized[category]
-            shown = items[:max_per_category]
-            hidden = len(items) - len(shown)
+        # Summarize bug fixes into a count instead of listing each one
+        if category == "Bug Fixes":
+            category_lines.append(f"  {emoji} {len(items)} bug fix{'es' if len(items) != 1 else ''}")
+            continue
 
-            lines.append(f"{emoji} *{category}*")
-            for change in shown:
-                # Truncate long changes
-                if len(change) > 100:
-                    change = change[:97] + "..."
-                lines.append(f"  • {escape_markdown(change)}")
-            if hidden > 0:
-                lines.append(f"  _...and {hidden} more_")
-            lines.append("")
+        for change in items:
+            if len(change) > 80:
+                change = change[:77] + "..."
+            category_lines.append(f"  {emoji} {escape_html(change)}")
 
-    # Community context (if enrichment enabled)
-    if enrichment:
-        lines.append(enrichment.rstrip())
+    if category_lines:
+        lines.append("")
+        lines.extend(category_lines)
 
-    # Footer
-    latest = releases[0]
-    lines.append(f"[View on GitHub]({latest['html_url']})")
+    lines.append(f'\n  <a href="{data.url}">View changelog →</a>')
 
     return "\n".join(lines)
 
 
-def send_digest(days: int = 7, quiet: bool = False, enrich: bool = False) -> bool:
+def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str, dict]:
     """
-    Fetch releases and send digest via Telegram.
+    Generate digest for multiple sources using version tracking.
 
     Args:
-        days: Look back N days for releases
-        quiet: Suppress preview output
-        enrich: Enable web context enrichment via Claude
+        sources: List of source keys to include
+        quiet: Suppress progress output
+
+    Returns:
+        Tuple of (formatted digest string, updated state dict)
+    """
+    if sources is None:
+        sources = DEFAULT_SOURCES
+
+    state = load_state()
+    new_state = {k: dict(v) for k, v in state.items()}  # deep-ish copy
+
+    lines = [
+        "☀️ <b>Tech Morning Digest</b>",
+    ]
+
+    sections = []
+
+    for source_key in sources:
+        if not quiet:
+            print(f"Fetching {source_key}...")
+
+        source_state = state.get(source_key, {})
+        seen_versions = set(source_state.get("seen_versions", []))
+        last_hash = source_state.get("content_hash", "")
+
+        data = get_release_data(source_key, seen_versions=seen_versions)
+
+        if not data or not data.content.strip():
+            if not quiet:
+                print(f"  No new updates for {source_key}")
+            continue
+
+        # For web sources, skip if content hasn't changed
+        if data.content_hash and data.content_hash == last_hash:
+            if not quiet:
+                print(f"  No changes for {source_key}")
+            continue
+
+        if not quiet:
+            print(f"  Parsing with Claude...")
+
+        parsed = parse_with_claude(data.content)
+        section = format_source_section(data, parsed)
+        sections.append(section)
+
+        # Build updated state for this source
+        entry = dict(new_state.get(source_key, {}))
+        if data.versions:
+            existing = set(entry.get("seen_versions", []))
+            existing.update(data.versions)
+            # Cap stored versions to prevent unbounded growth
+            entry["seen_versions"] = sorted(existing)[-MAX_STORED_VERSIONS:]
+        if data.content_hash:
+            entry["content_hash"] = data.content_hash
+        new_state[source_key] = entry
+
+    if not sections:
+        lines.append("No new updates. You're all caught up!")
+    else:
+        lines.extend(sections)
+
+    digest_text = "\n\n".join(lines) if sections else "\n".join(lines)
+    return digest_text, new_state
+
+
+def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
+    """
+    Generate and send digest via Telegram. Saves state on success.
+
+    Args:
+        sources: List of source keys
+        quiet: Suppress output
 
     Returns:
         True if successful
     """
-    if not quiet:
-        print(f"Fetching Claude Code releases from the last {days} days...")
-
-    releases = fetch_releases(days=days)
-
-    if not quiet:
-        print(f"Found {len(releases)} release(s)")
-
-    # Optional enrichment
-    enrichment = ""
-    if enrich and releases and ENRICHMENT_AVAILABLE:
-        versions = [r["tag_name"] for r in releases[:3]]
-        enrichment = enrich_digest(versions)
-
-    digest = format_digest(releases, enrichment)
+    digest, new_state = generate_digest(sources=sources, quiet=quiet)
 
     if not quiet:
         print("\n--- Digest Preview ---")
@@ -366,24 +262,31 @@ def send_digest(days: int = 7, quiet: bool = False, enrich: bool = False) -> boo
 
     try:
         notifier = TelegramNotifier()
-
-        # Telegram has 4096 char limit - send raw digest (title is redundant)
-        if len(digest) > 4000:
-            digest = digest[:3997] + "..."
-
-        # Use send with empty title since digest has its own header
         api_url = f"https://api.telegram.org/bot{notifier.bot_token}/sendMessage"
-        payload = {
-            'chat_id': notifier.chat_id,
-            'text': digest,
-            'parse_mode': 'Markdown',
-            'disable_web_page_preview': True,
-            'disable_notification': False
-        }
 
-        import requests
-        response = requests.post(api_url, json=payload, timeout=10)
-        response.raise_for_status()
+        # If digest fits in one message, send as-is.
+        # Otherwise, break up by repo: header first, then each repo separately.
+        if len(digest) <= 4000:
+            chunks = [digest]
+        else:
+            header, *source_sections = digest.split("\n\n▎")
+            chunks = [header]
+            for section in source_sections:
+                chunks.append("▎" + section)
+
+        for chunk in chunks:
+            payload = {
+                'chat_id': notifier.chat_id,
+                'text': chunk,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True,
+                'disable_notification': False
+            }
+            response = requests.post(api_url, json=payload, timeout=10)
+            response.raise_for_status()
+
+        # Only save state after successful send
+        save_state(new_state)
 
         if not quiet:
             print("Digest sent to Telegram!")
@@ -394,60 +297,65 @@ def send_digest(days: int = 7, quiet: bool = False, enrich: bool = False) -> boo
         return False
     except ValueError as e:
         print(f"Telegram not configured: {e}")
-        print("Run 'uv run telegram-setup' to configure Telegram credentials")
         return False
-
-
-def preview_digest(days: int = 7, enrich: bool = False) -> str:
-    """
-    Generate and return digest without sending.
-
-    Args:
-        days: Look back N days for releases
-        enrich: Enable web context enrichment
-
-    Returns:
-        Formatted digest string
-    """
-    releases = fetch_releases(days=days)
-
-    enrichment = ""
-    if enrich and releases and ENRICHMENT_AVAILABLE:
-        versions = [r["tag_name"] for r in releases[:3]]
-        enrichment = enrich_digest(versions)
-
-    return format_digest(releases, enrichment)
 
 
 def main():
     """CLI entry point."""
     import sys
 
-    days = 7
     preview_only = "--preview" in sys.argv
-    enrich = "--enrich" in sys.argv
+    sources = None  # Use defaults
 
-    if "--days" in sys.argv:
-        idx = sys.argv.index("--days")
+    if "--sources" in sys.argv:
+        idx = sys.argv.index("--sources")
         if idx + 1 < len(sys.argv):
-            days = int(sys.argv[idx + 1])
+            sources = sys.argv[idx + 1].split(",")
+
+    if "--list" in sys.argv:
+        print("Available sources:")
+        for s in list_sources():
+            print(f"  {s}")
+        return
+
+    if "--reset-state" in sys.argv:
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+            print("State reset. Next run will report all recent releases.")
+        else:
+            print("No state file to reset.")
+        return
+
+    if "--show-state" in sys.argv:
+        state = load_state()
+        if not state:
+            print("No state yet. Run a digest first.")
+        else:
+            print(json.dumps(state, indent=2))
+        return
 
     if "--help" in sys.argv or "-h" in sys.argv:
-        print("Claude Code Digest - Morning release notes summary")
+        print("Tech Digest - Morning release notes summary")
         print()
         print("Usage: claude-digest [OPTIONS]")
         print()
         print("Options:")
-        print("  --preview     Show digest without sending to Telegram")
-        print("  --days N      Look back N days for releases (default: 7)")
-        print("  --enrich      Add community context via Claude web search")
-        print("  --help, -h    Show this help message")
+        print("  --preview        Show digest without sending to Telegram")
+        print("  --sources X,Y,Z  Comma-separated list of sources to include")
+        print("  --list           List available sources")
+        print("  --show-state     Show current version tracking state")
+        print("  --reset-state    Clear tracked versions (next run reports everything)")
+        print("  --help, -h       Show this help message")
+        print()
+        print("Default sources:", ", ".join(DEFAULT_SOURCES))
         return
 
     if preview_only:
-        print(preview_digest(days, enrich=enrich))
+        digest, new_state = generate_digest(sources=sources)
+        print(digest)
+        # Preview doesn't save state
     else:
-        success = send_digest(days, enrich=enrich)
+        success = send_digest(sources=sources)
         sys.exit(0 if success else 1)
 
 
