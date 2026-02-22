@@ -9,8 +9,16 @@ from hashlib import sha256
 from dataclasses import dataclass, field
 from typing import Optional
 
+import re
+
 import requests
 from bs4 import BeautifulSoup
+
+# Patterns for dynamic text that changes between fetches without new content
+_DYNAMIC_LINE_RE = re.compile(
+    r"^(Updated\s+.+|Last\s+updated.+|Table of contents|All Collections)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -70,6 +78,12 @@ WEB_SOURCES = {
         "name": "ChatGPT App",
     },
 }
+
+
+def _stable_hash(content: str) -> str:
+    """Hash content after stripping dynamic lines that change between fetches."""
+    lines = [l for l in content.split("\n") if not _DYNAMIC_LINE_RE.match(l.strip())]
+    return sha256("\n".join(lines).encode()).hexdigest()
 
 
 def fetch_github_releases(repo: str, limit: int = 10) -> list[dict]:
@@ -175,7 +189,7 @@ def get_release_data(source_key: str, seen_versions: set[str] = None) -> Optiona
             source_name=config["name"],
             content=content,
             url=config["url"],
-            content_hash=sha256(content.encode()).hexdigest(),
+            content_hash=_stable_hash(content),
         )
 
     print(f"Unknown source: {source_key}")
