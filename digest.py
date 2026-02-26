@@ -201,8 +201,9 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
         source_state = state.get(source_key, {})
         seen_versions = set(source_state.get("seen_versions", []))
         last_hash = source_state.get("content_hash", "")
+        last_anchor = source_state.get("content_anchor", "")
 
-        data = get_release_data(source_key, seen_versions=seen_versions)
+        data = get_release_data(source_key, seen_versions=seen_versions, last_anchor=last_anchor)
 
         if not data or not data.content.strip():
             if not quiet:
@@ -231,6 +232,8 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
             entry["seen_versions"] = sorted(existing)[-MAX_STORED_VERSIONS:]
         if data.content_hash:
             entry["content_hash"] = data.content_hash
+        if data.content_anchor:
+            entry["content_anchor"] = data.content_anchor
         new_state[source_key] = entry
 
     if not sections:
