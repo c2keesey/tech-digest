@@ -1,0 +1,1 @@
+/home/c2k/gas-city/.gc/system/packs/gastown/assets/scripts/checks/adopt-pr-review-approved.sh

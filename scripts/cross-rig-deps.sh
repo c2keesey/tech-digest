@@ -1,0 +1,1 @@
+/home/c2k/gas-city/.gc/system/packs/maintenance/assets/scripts/cross-rig-deps.sh

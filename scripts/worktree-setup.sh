@@ -1,0 +1,1 @@
+/home/c2k/gas-city/.gc/system/packs/gastown/assets/scripts/worktree-setup.sh

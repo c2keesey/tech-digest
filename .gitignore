@@ -34,3 +34,8 @@ logs/
 # Bot state
 .bot_offset
 .bot_session
+
+# Gas City
+.beads/*
+!.beads/config.yaml
+!.beads/metadata.json
