@@ -59,7 +59,7 @@ def find_claude_executable() -> Optional[str]:
     return None
 
 
-def parse_with_claude(content: str, timeout: int = 60) -> Optional[dict]:
+def parse_with_claude(content: str, timeout: int = 120) -> Optional[dict]:
     """
     Parse release content using Claude CLI.
 
