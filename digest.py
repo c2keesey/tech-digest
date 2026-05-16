@@ -26,6 +26,12 @@ DEFAULT_SOURCES = ["claude-code", "claude-app", "cursor", "linear", "pydantic-ai
 MAX_STORED_VERSIONS = 50
 
 
+def _version_sort_key(v: str) -> tuple:
+    """Sort version strings numerically (e.g., v2.1.123 > v2.1.98)."""
+    parts = v.lstrip("v").split(".")
+    return tuple(int(p) if p.isdigit() else p for p in parts)
+
+
 def load_state() -> dict:
     """Load version tracking state from disk."""
     if STATE_FILE.exists():
@@ -229,7 +235,7 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
             existing = set(entry.get("seen_versions", []))
             existing.update(data.versions)
             # Cap stored versions to prevent unbounded growth
-            entry["seen_versions"] = sorted(existing)[-MAX_STORED_VERSIONS:]
+            entry["seen_versions"] = sorted(existing, key=_version_sort_key)[-MAX_STORED_VERSIONS:]
         if data.content_hash:
             entry["content_hash"] = data.content_hash
         if data.content_anchor:
