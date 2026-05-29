@@ -1,15 +1,6 @@
 {
   "claude-code": {
     "seen_versions": [
-      "v2.1.56",
-      "v2.1.58",
-      "v2.1.59",
-      "v2.1.61",
-      "v2.1.62",
-      "v2.1.63",
-      "v2.1.66",
-      "v2.1.68",
-      "v2.1.69",
       "v2.1.70",
       "v2.1.71",
       "v2.1.72",
@@ -50,28 +41,28 @@
       "v2.1.140",
       "v2.1.141",
       "v2.1.142",
-      "v2.1.143"
+      "v2.1.143",
+      "v2.1.144",
+      "v2.1.145",
+      "v2.1.146",
+      "v2.1.147",
+      "v2.1.148",
+      "v2.1.149",
+      "v2.1.150",
+      "v2.1.152",
+      "v2.1.153"
     ]
   },
   "cursor": {
-    "content_hash": "db5acf6937818d04da2c0ac1a6e46a0fdf0f6f8f6d4f2fe7f1710aa3b3d78291",
-    "content_anchor": "To take engineering tasks from start to finish, agents need a development environment similar to the setup on your laptop: cloned repositories, installed dependencies, credentials for internal toolchains, and access to build systems."
+    "content_hash": "cb911531f6975caa16983f0dd61d08f128e6794bd163907a7b00333daa5932d1",
+    "content_anchor": "You can now share canvases from Cursor with your team."
   },
   "linear": {
-    "content_hash": "434f192d6d59fa542ad3def6709159921ae3850eaabc895355cd427996919a14",
-    "content_anchor": "Code Intelligence gives Linear Agent controlled access to your codebase, turning repositories into shared product context your whole team can use."
+    "content_hash": "b05f0ab990be10b34bb0d413c2944657f9076c2ee22d4e66f2fcf7f5a5a9a05d",
+    "content_anchor": "Project Slack channels"
   },
   "pydantic-ai": {
     "seen_versions": [
-      "v1.54.0",
-      "v1.55.0",
-      "v1.56.0",
-      "v1.57.0",
-      "v1.58.0",
-      "v1.59.0",
-      "v1.60.0",
-      "v1.61.0",
-      "v1.62.0",
       "v1.63.0",
       "v1.64.0",
       "v1.65.0",
@@ -112,45 +103,24 @@
       "v1.95.1",
       "v1.96.0",
       "v1.96.1",
-      "v1.97.0"
+      "v1.97.0",
+      "v1.98.0",
+      "v1.99.0",
+      "v1.100.0",
+      "v1.101.0",
+      "v1.102.0",
+      "v1.103.0",
+      "v2.0.0b1",
+      "v2.0.0b2",
+      "v2.0.0b3"
     ]
   },
   "granola": {
-    "content_hash": "088243b143dcd095f802981bbec82dbd60de77bdd0fd78b23baf7d84efbe141a",
-    "content_anchor": "Granola Chat just got smarter"
+    "content_hash": "9dfc0713dfa524e6861d95932134d0281e2c322f69f03ebf1fe6856047706094",
+    "content_anchor": "New: Briefs prepare you for your next meeting as you join"
   },
   "agent-deck": {
     "seen_versions": [
-      "v1.7.37",
-      "v1.7.38",
-      "v1.7.39",
-      "v1.7.40",
-      "v1.7.41",
-      "v1.7.42",
-      "v1.7.43",
-      "v1.7.44",
-      "v1.7.49",
-      "v1.7.50",
-      "v1.7.51",
-      "v1.7.54",
-      "v1.7.56",
-      "v1.7.57",
-      "v1.7.58",
-      "v1.7.60",
-      "v1.7.61",
-      "v1.7.62",
-      "v1.7.65",
-      "v1.7.66",
-      "v1.7.67",
-      "v1.7.68",
-      "v1.7.69",
-      "v1.7.70",
-      "v1.7.71",
-      "v1.7.72",
-      "v1.7.73",
-      "v1.7.74",
-      "v1.7.75",
-      "v1.7.77",
       "v1.7.78",
       "v1.7.79",
       "v1.7.80",
@@ -170,7 +140,37 @@
       "v1.9.8",
       "v1.9.9",
       "v1.9.10",
-      "v1.9.11"
+      "v1.9.11",
+      "v1.9.12",
+      "v1.9.13",
+      "v1.9.14",
+      "v1.9.15",
+      "v1.9.16",
+      "v1.9.17",
+      "v1.9.18",
+      "v1.9.19",
+      "v1.9.20",
+      "v1.9.21",
+      "v1.9.22",
+      "v1.9.23",
+      "v1.9.24",
+      "v1.9.25",
+      "v1.9.26",
+      "v1.9.27",
+      "v1.9.28",
+      "v1.9.29",
+      "v1.9.30",
+      "v1.9.31",
+      "v1.9.32",
+      "v1.9.35",
+      "v1.9.36",
+      "v1.9.37",
+      "v1.9.38",
+      "v1.9.39",
+      "v1.9.40",
+      "v1.9.41",
+      "v1.9.42",
+      "v1.9.43"
     ]
   },
   "beads": {
@@ -207,8 +207,8 @@
     ]
   },
   "claude-app": {
-    "content_hash": "9bf9842d3b5ce5d5fd911f8091526f9871afb9f446eb5b5d5a9326d8bb9f00f5",
-    "content_anchor": "Claude Design by Anthropic Labs"
+    "content_hash": "c17d330dff6430f96ee45f3ca2f6937d019a5fcfc4330cfd4879484d7e14707d",
+    "content_anchor": "Claude now works with more security and compliance tools"
   },
   "gas-city": {
     "seen_versions": [

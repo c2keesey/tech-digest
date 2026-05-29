@@ -26,10 +26,21 @@ DEFAULT_SOURCES = ["claude-code", "claude-app", "cursor", "linear", "pydantic-ai
 MAX_STORED_VERSIONS = 50
 
 
-def _version_sort_key(v: str) -> tuple:
-    """Sort version strings numerically (e.g., v2.1.123 > v2.1.98)."""
-    parts = v.lstrip("v").split(".")
-    return tuple(int(p) if p.isdigit() else p for p in parts)
+def _version_sort_key(v: str) -> tuple[tuple[int, str], ...]:
+    """Sort version strings numerically (e.g., v2.1.123 > v2.1.98).
+
+    Each segment becomes (int, suffix) so '0-rc1' → (0, '-rc1') and
+    pure numeric '14' → (14, ''). Suffix sorts lexicographically after
+    empty string, so 1.0.0 > 1.0.0-rc1.
+    """
+    result = []
+    for part in v.lstrip("v").split("."):
+        match = __import__("re").match(r"^(\d+)(.*)", part)
+        if match:
+            result.append((int(match.group(1)), match.group(2)))
+        else:
+            result.append((0, part))
+    return tuple(result)
 
 
 def load_state() -> dict:
