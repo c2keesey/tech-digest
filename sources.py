@@ -59,6 +59,11 @@ GITHUB_SOURCES = {
         "name": "Gas City",
         "url": "https://github.com/gastownhall/gascity/releases",
     },
+    "codex": {
+        "repo": "openai/codex",
+        "name": "Codex CLI",
+        "url": "https://github.com/openai/codex/releases",
+    },
 }
 
 # Web changelog sources (HTML pages)
