@@ -1,14 +1,6 @@
 {
   "claude-code": {
     "seen_versions": [
-      "v2.1.140",
-      "v2.1.141",
-      "v2.1.142",
-      "v2.1.143",
-      "v2.1.144",
-      "v2.1.145",
-      "v2.1.146",
-      "v2.1.147",
       "v2.1.148",
       "v2.1.149",
       "v2.1.150",
@@ -50,28 +42,27 @@
       "v2.1.220",
       "v2.1.221",
       "v2.1.222",
-      "v2.1.223"
+      "v2.1.223",
+      "v2.1.224",
+      "v2.1.225",
+      "v2.1.226",
+      "v2.1.227",
+      "v2.1.228",
+      "v2.1.229",
+      "v2.1.231",
+      "v2.1.232"
     ]
   },
   "cursor": {
-    "content_hash": "fad92b60d740ec9dfdde222c819613a3a2678297a8575752f9b5f52079a3d404",
-    "content_anchor": "Cursor can now read, write, and act across your Google Workspace."
+    "content_hash": "ff7d8e0212f2826936151f80adfe9221a0c50be491afa75bd75a1ec95754226e",
+    "content_anchor": "Agents do their best work when they start in a ready environment: repos cloned, dependencies installed, and your install script already run."
   },
   "linear": {
-    "content_hash": "bbdb1454310567ec376d00cdf6148f21532a703d76effe48045480880e414454",
-    "content_anchor": "Coding sessions on mobile"
+    "content_hash": "5e1af54559236d6168a83f81265e5aa9b8a3f1d537db3d5f469e0c1b7cda2d11",
+    "content_anchor": "Initiatives are Linear\u2019s way to manage product strategy and high-level planning across projects. Strategy may start at the company level, but teams carry it forward. You can now assign a team to lead an initiative, making it clear who is responsible for driving the work and how it contributes to the broader direction."
   },
   "pydantic-ai": {
     "seen_versions": [
-      "v1.88.0",
-      "v1.89.0",
-      "v1.89.1",
-      "v1.90.0",
-      "v1.91.0",
-      "v1.92.0",
-      "v1.93.0",
-      "v1.94.0",
-      "v1.95.0",
       "v1.95.1",
       "v1.96.0",
       "v1.96.1",
@@ -87,6 +78,9 @@
       "v1.106.0",
       "v1.107.0",
       "v1.107.1",
+      "v1.107.2",
+      "v1.107.4",
+      "v1.107.5",
       "v2.0.0b1",
       "v2.0.0b2",
       "v2.0.0b3",
@@ -112,7 +106,13 @@
       "v2.22.0",
       "v2.23.0",
       "v2.24.0",
-      "v2.25.0"
+      "v2.25.0",
+      "v2.26.0",
+      "v2.27.0",
+      "v2.27.1",
+      "v2.28.0",
+      "v2.29.0",
+      "v2.30.0"
     ]
   },
   "granola": {
@@ -208,12 +208,13 @@
       "v1.1.0",
       "v1.1.0-rc.1",
       "v1.1.0-rc.2",
-      "v1.1.2"
+      "v1.1.2",
+      "v1.2.1"
     ]
   },
   "claude-app": {
-    "content_hash": "41e1d6e32538153a5d80bb4eba97398e3f94e5b3d52d36b66fc83c35c56f176e",
-    "content_anchor": "We launched Claude Opus 5, a thoughtful and proactive model that comes close to the frontier intelligence of Claude Fable 5 at half the price. For more information, see our blog post:"
+    "content_hash": "fee1f279a4e830ec409c3d4f8b783df22b4999162c11e233aa8bc8ea37b93761",
+    "content_anchor": "Skill and plugin security scanning (beta)"
   },
   "gas-city": {
     "seen_versions": [
@@ -241,6 +242,32 @@
       "v1.3.4",
       "v1.3.5",
       "v1.4.0"
+    ]
+  },
+  "codex": {
+    "seen_versions": [
+      "rust-v0.146.1",
+      "rust-v0.147.0",
+      "rust-v0.147.0-alpha.6.5",
+      "rust-v0.147.0-alpha.6.6",
+      "rust-v0.147.0-alpha.7",
+      "rust-v0.147.0-alpha.10",
+      "rust-v0.147.0-alpha.11",
+      "rust-v0.147.0-alpha.12",
+      "rust-v0.147.0-alpha.13",
+      "rust-v0.148.0-alpha.1",
+      "rust-v0.148.0-alpha.2",
+      "rust-v0.148.0-alpha.4",
+      "rust-v0.148.0-alpha.5",
+      "rust-v0.148.0-alpha.6",
+      "rust-v0.148.0-alpha.7",
+      "rust-v0.148.0-alpha.8",
+      "rust-v0.148.0-alpha.9",
+      "rust-v0.148.0-alpha.11",
+      "rust-v0.148.0-alpha.12",
+      "rust-v0.148.0-alpha.13",
+      "rust-v0.148.0-alpha.14",
+      "rust-v0.148.0-alpha.15"
     ]
   }
 }

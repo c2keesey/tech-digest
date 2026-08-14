@@ -88,6 +88,10 @@ WEB_SOURCES = {
         "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes",
         "name": "ChatGPT App",
     },
+    "pi": {
+        "url": "https://pi.ai/blog",
+        "name": "Pi",
+    },
 }
 
 
