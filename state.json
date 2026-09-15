@@ -1,9 +1,6 @@
 {
   "claude-code": {
     "seen_versions": [
-      "v2.1.203",
-      "v2.1.204",
-      "v2.1.205",
       "v2.1.206",
       "v2.1.207",
       "v2.1.214",
@@ -50,7 +47,10 @@
       "v2.1.266",
       "v2.1.267",
       "v2.1.268",
-      "v2.1.269"
+      "v2.1.269",
+      "v2.1.270",
+      "v2.1.271",
+      "v2.1.272"
     ]
   },
   "cursor": {
@@ -58,8 +58,8 @@
     "content_anchor": "Today we're launching Projects in Cursor. Projects lets you take on larger bodies of work, such as a feature, a migration, or a full app. It maintains context over months of work, delegates tasks to thousands of subagents, and performs recurring work without being prompted."
   },
   "linear": {
-    "content_hash": "9fdc913c7103855c74db4248616e622e32db5b0b069ab0850ddf20af4e403340",
-    "content_anchor": "An active workspace can create a significant amount of notifications each day, and until now your inbox treated them all the same. The new"
+    "content_hash": "9c5e1b691e29c775337653759261288a36fd7ac9c9704331f76e3a925036b104",
+    "content_anchor": "Loops for product management"
   },
   "pydantic-ai": {
     "seen_versions": [
@@ -121,11 +121,6 @@
   },
   "agent-deck": {
     "seen_versions": [
-      "v1.9.26",
-      "v1.9.27",
-      "v1.9.28",
-      "v1.9.29",
-      "v1.9.30",
       "v1.9.31",
       "v1.9.32",
       "v1.9.35",
@@ -170,7 +165,12 @@
       "v1.16.2",
       "v1.16.3",
       "v1.16.4",
-      "v1.16.5"
+      "v1.16.5",
+      "v1.16.6",
+      "v1.16.7",
+      "v1.16.8",
+      "v1.16.9",
+      "v1.16.10"
     ]
   },
   "beads": {
@@ -251,10 +251,6 @@
   },
   "codex": {
     "seen_versions": [
-      "rust-v0.151.0-alpha.3",
-      "rust-v0.151.0-alpha.4",
-      "rust-v0.151.0-alpha.5",
-      "rust-v0.151.0-alpha.6",
       "rust-v0.151.0-alpha.7",
       "rust-v0.151.0-alpha.7.1",
       "rust-v0.151.0-alpha.7.2",
@@ -296,11 +292,15 @@
       "rust-v0.155.0-alpha.1",
       "rust-v0.155.0-alpha.2",
       "rust-v0.155.0-alpha.2.3",
+      "rust-v0.155.0-alpha.2.4",
       "rust-v0.155.0-alpha.3",
       "rust-v0.155.0-alpha.3.7",
       "rust-v0.155.0-alpha.3.8",
       "rust-v0.155.0-alpha.3.9",
-      "rust-v0.155.0-alpha.3.10"
+      "rust-v0.155.0-alpha.3.10",
+      "rust-v0.155.0-alpha.4",
+      "rust-v0.155.0-alpha.5",
+      "rust-v0.155.0-alpha.6"
     ]
   }
 }
