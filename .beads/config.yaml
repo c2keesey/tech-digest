@@ -48,6 +48,8 @@ issue-prefix: td
 dolt.auto-start: false
 gc.endpoint_origin: inherited_city
 gc.endpoint_status: verified
+sync:
+    remote: "git+ssh://git@github.com/c2keesey/tech-digest.git"
 
 # Multi-repo configuration (experimental - bd-307)
 # Allows hydrating from multiple repositories and routing writes to the correct JSONL
