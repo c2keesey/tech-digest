@@ -31,9 +31,12 @@ Thumbs.db
 logs/
 .env
 
-# Bot state
+# Runtime files must never be staged by the maintenance bot
 .bot_offset
 .bot_session
+.runtime.lock
+.digest-outbox.json
+.beads.gate.lock
 
 # Gas City
 .beads/*
