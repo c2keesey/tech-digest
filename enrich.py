@@ -82,7 +82,7 @@ Keep it concise - this will be appended to a Telegram message.'''
         )
 
         if result.returncode != 0:
-            print(f"Claude search failed: {result.stderr}")
+            print(f"Claude search failed (exit {result.returncode}; diagnostics withheld)")
             return None
 
         output = result.stdout.strip()
@@ -96,8 +96,8 @@ Keep it concise - this will be appended to a Telegram message.'''
     except subprocess.TimeoutExpired:
         print(f"Claude search timed out after {timeout}s")
         return None
-    except Exception as e:
-        print(f"Claude search error: {e}")
+    except Exception:
+        print("Claude search failed; diagnostics withheld")
         return None
 
 
