@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
 
-from claude_runtime import ClaudeFailure, parse_release, validate_release
+from pi_runtime import ParseFailure, parse_release, validate_release
 from delivery import (DeliveryFailure, deliver_sources, load_outbox, save_outbox,
                       source_chunks)
 from sources import SourceFailure, ReleaseData, get_release_data, list_sources
@@ -33,11 +33,11 @@ def save_state(state):
     atomic_json(STATE_FILE, normalize_state(state))
 
 
-def parse_with_claude(content, timeout=120):
+def parse_with_pi(content, timeout=120):
     try:
         prompt = PROMPT_FILE.read_text()
     except OSError:
-        raise ClaudeFailure("parse-prompt-unavailable") from None
+        raise ParseFailure("parse-prompt-unavailable") from None
     return parse_release(content, prompt, timeout)
 
 
@@ -111,7 +111,7 @@ def generate_digest(sources=None, quiet=False, state=None, fetch=None):
                     generation.unchanged.append(source)
                     continue
                 raise SourceFailure("source-empty-release")
-            parsed = parse_with_claude(data.content)
+            parsed = parse_with_pi(data.content)
             section = format_source_section(data, parsed)
             # Validate size before preparing a cursor or any network side effect.
             source_chunks(section)
@@ -125,7 +125,7 @@ def generate_digest(sources=None, quiet=False, state=None, fetch=None):
                 cursor["content_anchor"] = data.content_anchor
             generation.sections[source] = section
             generation.cursors[source] = cursor
-        except (ClaudeFailure, SourceFailure, DeliveryFailure) as error:
+        except (ParseFailure, SourceFailure, DeliveryFailure) as error:
             generation.failures[source] = str(error)
             if not quiet:
                 print(f"{source}: {error}")
@@ -206,7 +206,7 @@ def main(argv=None):
                     print("Pending delivery outbox exists; preview does not reconcile or send it.")
             return 1 if generation.failures else 0
         return 0 if send_digest(sources=sources) else 1
-    except (ClaudeFailure, StateFailure, SourceFailure) as error:
+    except (ParseFailure, StateFailure, SourceFailure) as error:
         print(f"Digest failed: {error}")
         return 1
     except Exception:

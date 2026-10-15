@@ -1,5 +1,11 @@
 # td-f5l repair and reviewed operational handoff
 
+**Updated 2026-10-15:** Chris chose Pi/Codex subscription instead of Claude
+reauthentication. [Decision and authenticated evidence](decisions/2026-10-15-pi-codex-subscription.md)
+are persisted. The real full-default no-send preview now passes; Claude auth is
+**not** a blocker. Production remains unchanged. Runtime installation, review
+and the unresolved historical delivery baseline still need the reviewed handoff.
+
 ## Scope and retained-owner audit
 
 This is the original `td-f5l` implementation, not a new corrective Bead. The
@@ -12,15 +18,26 @@ an implementation base. No cleanup, duplicate owner or corrective lineage was
 created. The original acceptance criteria were read from an isolated copy of
 existing Beads evidence; no Bead was created, updated or closed by the worker.
 
+On continuation, the local feature ref had been reset to `origin/main`, while
+PR #2 still retained `4692634`. The worker verified that exact remote PR head,
+verified zero local-only commits, fetched and **fast-forwarded** the same retained
+branch back to it. Existing lock/evidence artifacts were preserved. No new owner,
+setup, branch lineage, destructive reset or duplicate implementation was created.
+
 ## Implemented design
 
 - Fetch, parse/schema, unchanged and delivery failures are distinct per source.
   Failed parsing cannot format as “No recent updates,” advance that cursor, or
   claim a fully successful run. Healthy sources can acknowledge independently.
-- Supported PATH-discovered Claude print/JSON invocation, safe mode (not bare),
-  no tools/MCP and no session persistence. Safe mode retains normal supported
-  auth while disabling user hooks/plugins. No hardcoded obsolete bot model,
-  unsafe resumed session or permission bypass.
+- Supported public Pi `ModelRuntime` SDK invocation, explicitly
+  `openai-codex/gpt-6.1-sol` with low reasoning and existing subscription OAuth.
+  Native provider/API/endpoint and response identity are checked; no API keys,
+  paid fallback, other model fallback, user provider overrides or credential
+  copying. No tools, agent sessions, context/resource loading, hooks or extensions.
+- Provider-side strict JSON and client validation; 192 KiB prompt / 256 KiB frame,
+  16 KiB final text / 64 KiB stream including thinking, 120-second deadline and
+  zero inference retries. Oversize fails without truncation or cursor advancement.
+  Dormant Claude community enrichment is disabled, not a fallback.
 - Legacy numeric/string tags normalize deterministically; malformed state
   fails closed rather than becoming an empty cursor. A shared Linux flock
   serializes digest/cron and bot turns. Runtime writes use same-directory atomic
@@ -43,7 +60,7 @@ existing Beads evidence; no Bead was created, updated or closed by the worker.
   shell-expands `.env`, sends a second failure notification, or truncates
   historical evidence. Explicit previews must not go into service logs.
 
-## Reproduced runtime failure — still requires human authentication
+## Historical Claude failure — superseded, not an authentication requirement
 
 Read-only bounded diagnostics found 37 Claude parse failures, 39 false
 “No recent updates” strings, 11 reported sends and 11 Pi 403s in the retained
@@ -54,21 +71,43 @@ echoed or newly persisted by the worker.
 
 The **original** parser invocation with public synthetic input was reproduced:
 exit 1, 73 stdout bytes, zero stderr bytes, expired-OAuth diagnostics on stdout.
-The supported safe-mode JSON adapter also reproduces expired OAuth, now as
-`claude-auth-required` rather than a misleading empty-stderr parse failure.
-`claude auth status` reports `loggedIn: false`, `authMethod: none`; the worker
-has no supported API-key/OAuth-token environment credential, and the primary
-`.env` has no supported Claude auth variable. No credentials were rotated,
-reauthenticated or copied by the worker.
+The first PR iteration reproduced the same expired Claude OAuth through a safe
+adapter and reported it honestly. That proposal is now superseded by Chris's
+explicit Pi/Codex decision: **do not reauthenticate Claude, provision API keys,
+or use Claude as fallback**. No credentials were rotated or copied by the worker.
 
-**Blocker:** a human must run supported `claude auth login` as the actual
-service user, or provision an approved supported API credential in that
-service's environment, then verify a tool-free public-fixture parse. Do not
-use `--bare` with subscription OAuth, suppress auth errors, bypass permission
-checks, or put raw auth output in logs. Until then live parsed summaries and a
-successful live catch-up preview are **not verified**. The offline end-to-end
-fixture preview passes; live preview returns nonzero honestly. The new Pi
-GitHub fetch succeeds; its parsing is independently blocked by Claude auth.
+## Authenticated Pi/Codex no-send evidence
+
+The real public Pi SDK call passed a synthetic strict-schema fixture using the
+existing subscription. At `2026-10-15T05:02:14Z`, the opt-in real validation
+checked all **11 default sources**, summarized **10** (Granola unchanged), and
+returned CLI preview exit **0**, with no fetch/parse failures and a valid real
+advisory response. Pi version **0.84.1**, explicit provider/model/API:
+`openai-codex` / `gpt-6.1-sol` / `openai-codex-responses`. The bridge checked
+subscription OAuth and the native Codex endpoint before dispatch; raw model
+output and release text were captured in memory, never persisted in logs.
+
+**Zero Telegram requests**, zero notifier constructions, no cursor/outbox/session
+writes, and protected-primary state, manifest, credentials, offsets/sessions and
+logs unchanged across validation. Fixture + full preview + advisory took 75.12s.
+The normal two-source Claude Code/Pi validation also passed (22.13s). The initial
+96 KiB input limit safely rejected the observed 127,959-byte Claude Code batch;
+raising the explicit limit to 192 KiB fixed this without dropping any releases.
+
+Local content-free receipts (mode 0600, ignored) are retained under `data/`:
+`pi-codex-all-sources-2026-10-15.json` and
+`pi-codex-no-send-2026-10-15-verified.json`; the initial failing-bound receipt was
+preserved too. Reproduce only from the isolated worktree:
+
+```bash
+uv run --frozen python scripts/validate_pi_no_send.py \
+  --sources claude-code,claude-app,cursor,linear,pydantic-ai,granola,agent-deck,beads,gas-city,codex,pi \
+  --receipt data/pi-codex-recheck.json
+```
+
+This is real authenticated subscription inference and real source fetching, not
+provider mocks. It blocks Telegram POSTs/notifier construction and refuses the
+protected primary. The offline gate remains entirely mocked/network-free.
 
 ## Swallowed-release evidence and no-send recovery
 
@@ -105,7 +144,7 @@ Read-only commands, run only from the isolated worktree:
 uv run --frozen python recovery_preview.py --baseline-ref e45ec38 \
   --observed-state /home/c2k/repos/tech-digest/state.json --inventory-only
 
-# After authentication AND review of a proven-good baseline:
+# After review of a proven-good baseline (Pi subscription already validated):
 uv run --frozen python recovery_preview.py --baseline-ref <reviewed-ref> \
   --max-pages 3 --max-releases 5 --sources claude-code,beads
 ```
@@ -115,12 +154,14 @@ archive pages and five selected candidates per GitHub source (hard caps:
 five pages/ten selected releases). It excludes baseline tags, deduplicates
 archive results, reports unresolved/unselected candidates, and fails honestly
 when the bound does not locate needed history or parsing fails. There is
-**no send or state-rewrite option**. A synthetic archive catch-up fixture passes;
-a live authenticated catch-up is blocked as above. A live one-page/two-release
-attempt selected Claude Code `v2.1.296` and `v2.1.295`, reported 51 unselected or
-unlocated candidates, and returned exit 1 for `claude-auth-required` without
-sending or changing cursor/outbox files. A human must choose the proven-good
-boundary, review duplicates against Telegram history, approve the
+**no send or state-rewrite option**. A synthetic archive catch-up fixture passes.
+In the first PR iteration (before the Pi/Codex decision), a live two-release
+preview selected Claude Code `v2.1.296`/`v2.1.295`, reported 51 unselected/unlocated
+candidates and failed Claude auth safely. That is historical evidence, not the
+current provider state. No live recovery baseline was changed or newly approved
+on continuation. A successful current-source Pi preview does **not** establish
+last-proven historical delivery. A human must choose the proven-good boundary,
+review duplicates against Telegram history, approve the
 exact bounded batch and a separate recovery delivery plan. Do not just clear
 `state.json` or run the cron wrapper as a test.
 
@@ -139,14 +180,23 @@ without re-sending. Production state/outbox editing was not performed here.
 
 The primary remains on `main`. Its pre-existing dirty `state.json`, Beads backup
 manifest and gate-lock artifact were not reset, staged, cleaned or rewritten.
-Fingerprints at worker audit and after implementation remained:
+Fingerprints during the **October 13 initial implementation** remained:
 
 - `state.json`: `c47497c35eef4b2091c03d51ea06b1da3ec02092a405acc78155caf0d2134657`
 - `.beads/backup/manifest`: `9f435406983abb46eebe766dbcde2507c2d1b367725ab0b9593b286afd1a0d90`
 
-These are current evidence, not the older September manifest fingerprint.
-Credentials, existing sessions/offsets, logs and uncertain backups remain in
-place. No original sensitive log was changed. After reviewed authorization:
+On the October 15 continuation, the primary had legitimately changed since
+that earlier run. Its new read-only baseline was preserved rather than restored
+or reset to an older snapshot:
+
+- `state.json`: `29cebefbca1f2b0446442a6833f4a11cebeb171bd91a0d9d03e98ebd39cced99`
+- `.beads/backup/manifest`: `4e9630cb7dbb482b732d243c7938acd8e3ac77f65a045afad7651e1109122767`
+
+Authenticated validation verified all protected evidence unchanged across its
+runs. Credentials, existing sessions/offsets, logs and uncertain backups remain
+in place. No original sensitive log was changed. Pi's supported SDK can refresh
+its own existing OAuth store in place; it never copies credentials here.
+After reviewed authorization:
 
 1. Preserve old logs in a restricted mode-0600 archive outside the checkout,
    record hashes/access ownership privately, and prevent public log ingestion.
@@ -162,16 +212,38 @@ place. No original sensitive log was changed. After reviewed authorization:
 
 ## Shipping and deployment boundary
 
-Repository gate: `bash scripts/check.sh` (offline failure matrices, process
+Repository gate: `bash scripts/check.sh` — **55 Python + 14 Node tests pass**
+(offline failure matrices, process
 concurrency, parser/state migration, atomic crash-window retries, bot safety,
 no-send end-to-end preview, syntax/compile and whitespace checks). Also run the
-catalog's exact fixed compile gate separately. No gate runs a real bot listener
-or Telegram request.
+catalog's exact fixed compile gate separately. Node tests additionally cover
+subscription-only auth, wrong-provider/model/API/endpoint refusal, strict schema,
+input/output/stream/deadline limits and no fallback after quota/network failures.
+No offline gate runs a real bot listener, provider or Telegram request.
 
-Push only `work/td-f5l-ready-work`; PR targets `main`, with no auto-merge. Keep
-the PR draft while the live-auth/proven-baseline acceptance remains unresolved.
-**Merge, dependency installation into production, cron/service installation or
-restart, credential rotation, any catch-up send and Bead closure are left to
-the reviewed handoff.** Workers have no deployment/restart authority. Because
-runtime state is tracked historically, production checkout/deployment must
-preserve its dirty cursor and manifest rather than use `git reset --hard`.
+Push only `work/td-f5l-ready-work`; update existing draft PR #2 targeting `main`,
+with no auto-merge. Exact remaining boundaries:
+
+1. **Review/merge:** approve the Pi subscription adapter and advisory-only bot.
+   Original swallowed-release acceptance still needs a proven-good delivery
+   baseline and an approved recovery plan; do not infer delivery from cursors.
+   Review pending first-run batches (especially the new Pi GitHub cursor) before
+   enabling scheduled sends; never pre-seed seen cursors to hide the backlog.
+   Claude authentication/API-key provisioning is no longer a blocker or action.
+2. **Production installation:** one digest cron entry has no explicit PATH.
+   A `/usr/bin:/bin` runtime-discovery probe returns `pi-runtime-unavailable`;
+   the existing local Pi wrapper is not sufficient in that context. A reviewed
+   operator must expose the installed supported Node/Pi runtime in cron/service
+   PATH, preserve the actual user's HOME/existing Pi OAuth store without copying
+   credentials, and verify exact Sol model catalog availability in that context.
+   Read-only system/user unit inventory found no digest/Telegram-named unit;
+   identify and review the listener's real installation/activation method.
+   Interactive-worktree validation does not claim those contexts are installed.
+3. **Operations:** installation into production, any authorized activation/restart,
+   preservation-aware sensitive-log rotation, recovery reconciliation and explicit
+   bounded catch-up-send approval remain operator actions. Bead closure waits
+   for reviewed completion of original acceptance. No worker deployment authority.
+
+No merge, installation, activation/restart, catch-up send or state reset occurred.
+Because runtime state is tracked historically, reviewed installation must preserve
+its dirty cursor and manifest rather than use `git reset --hard`.

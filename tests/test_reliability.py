@@ -15,13 +15,14 @@ from unittest.mock import Mock, patch
 import requests
 
 import bot
-import claude_runtime
+import pi_runtime
 import delivery
 import digest
+import enrich
 import recovery_preview
 import sources
 import state_store
-from claude_runtime import ClaudeFailure
+from pi_runtime import ParseFailure
 from state_store import StateFailure
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,11 @@ def release(key="claude-code", version="v1.1", web=False):
                                versions=[] if web else [version],
                                content_hash="new-hash" if web else "",
                                content_anchor="new-anchor" if web else "")
+
+
+def pi_envelope(text):
+    return {"ok": True, "provider": pi_runtime.PROVIDER, "model": pi_runtime.MODEL,
+            "api": pi_runtime.API, "auth": "subscription-oauth", "text": text}
 
 
 def response(status=200, body=None):
@@ -68,7 +74,7 @@ class IsolatedTest(unittest.TestCase):
         self.get = self.start_patch("sources.requests.get", side_effect=AssertionError("unmocked source request"))
         self.notifier = self.start_patch("digest.TelegramNotifier", return_value=Mock(bot_token=TOKEN, chat_id=CHAT))
         self.fetch = self.start_patch("digest.get_release_data", side_effect=lambda key, **kw: release(key))
-        self.parse = self.start_patch("digest.parse_with_claude", return_value=PARSED)
+        self.parse = self.start_patch("digest.parse_with_pi", return_value=PARSED)
 
     def start_patch(self, target, **kwargs):
         p = patch(target, **kwargs)
@@ -88,7 +94,7 @@ class IsolatedTest(unittest.TestCase):
 
 class GenerationTests(IsolatedTest):
     def test_parse_failure_never_advances_or_claims_unchanged(self):
-        self.parse.side_effect = ClaudeFailure("claude-auth-required")
+        self.parse.side_effect = ParseFailure("pi-subscription-required")
         generation = digest.generate_digest(["claude-code"], quiet=True)
         self.assertIn("claude-code", generation.failures)
         self.assertNotIn("No recent updates", generation.text)
@@ -120,7 +126,7 @@ class GenerationTests(IsolatedTest):
 
     def test_successful_source_commits_but_degraded_run_is_failure(self):
         self.fetch.side_effect = lambda key, **kw: release(key)
-        self.parse.side_effect = [PARSED, ClaudeFailure("claude-timeout")]
+        self.parse.side_effect = [PARSED, ParseFailure("pi-timeout")]
         self.post.side_effect = None
         self.post.return_value = response()
         result, output = self.send(["claude-code", "beads"])
@@ -143,7 +149,7 @@ class GenerationTests(IsolatedTest):
         initial = {"cursor": {"content_hash": "old", "content_anchor": "old-anchor"}}
         state_store.atomic_json(self.state, initial)
         self.fetch.side_effect = lambda key, **kw: release(key, web=True)
-        self.parse.side_effect = ClaudeFailure("parse-invalid-json")
+        self.parse.side_effect = ParseFailure("parse-invalid-json")
         self.assertFalse(self.send(["cursor"])[0])
         self.assertEqual(digest.load_state(), initial)
 
@@ -160,10 +166,10 @@ class GenerationTests(IsolatedTest):
         self.fetch.assert_not_called()
 
     def test_no_send_end_to_end_preview_uses_real_runtime_adapter(self):
-        with patch("digest.parse_with_claude", side_effect=lambda text: claude_runtime.parse_release(text, "fixture")), \
-             patch("claude_runtime.find_claude_executable", return_value="/supported/claude"), \
-             patch("claude_runtime.subprocess.run", return_value=subprocess.CompletedProcess(
-                 [], 0, json.dumps({"is_error": False, "result": json.dumps(PARSED)}), "")) as invoke, \
+        with patch("digest.parse_with_pi", side_effect=lambda text: pi_runtime.parse_release(text, "fixture")), \
+             patch("pi_runtime.find_pi_runtime", return_value=("/supported/node", "/supported/pi/index.js")), \
+             patch("pi_runtime.subprocess.run", return_value=subprocess.CompletedProcess(
+                 [], 0, json.dumps(pi_envelope(json.dumps(PARSED))), "")) as invoke, \
              redirect_stdout(io.StringIO()) as output:
             self.assertEqual(digest.main(["--preview", "--sources", "claude-code"]), 0)
         self.assertIn("Public fixture feature", output.getvalue())
@@ -171,15 +177,16 @@ class GenerationTests(IsolatedTest):
         self.assertFalse(self.outbox.exists())
         self.post.assert_not_called()
         self.notifier.assert_not_called()
-        self.assertIn("--safe-mode", invoke.call_args.args[0])
-        self.assertIn("--no-session-persistence", invoke.call_args.args[0])
-        self.assertEqual(invoke.call_args.kwargs["input"], PRIVATE)
+        self.assertIn("pi_subscription.mjs", invoke.call_args.args[0][1])
+        request = json.loads(invoke.call_args.kwargs["input"])
+        self.assertEqual(request["prompt"], PRIVATE)
+        self.assertTrue(request["structured"])
 
     def test_preview_failure_returns_nonzero_and_preserves_pending_journal(self):
         state_store.atomic_json(self.outbox, {"claude-code": {"cursor": self.initial["claude-code"],
              "chunks": [{"text": "frozen", "status": "uncertain"}]}})
         before = self.outbox.read_bytes()
-        self.parse.side_effect = ClaudeFailure("claude-auth-required")
+        self.parse.side_effect = ParseFailure("pi-subscription-required")
         with redirect_stdout(io.StringIO()) as output:
             self.assertEqual(digest.main(["--preview", "--sources", "claude-code"]), 1)
         self.assertEqual(self.state.read_bytes(), self.original)
@@ -344,7 +351,7 @@ class StateTests(IsolatedTest):
         # Existing mixed cursors migrate only when delivery is acknowledged.
         state_store.atomic_json(self.state, {"claude-code": {"seen_versions": versions}})
         original = self.state.read_bytes()
-        self.parse.side_effect = ClaudeFailure("auth-required")
+        self.parse.side_effect = ParseFailure("pi-subscription-required")
         self.assertFalse(self.send()[0])
         self.assertEqual(self.state.read_bytes(), original)
         self.parse.side_effect = None
@@ -386,43 +393,75 @@ class StateTests(IsolatedTest):
 
 class RuntimeTests(unittest.TestCase):
     def invoke(self, stdout, stderr="", code=0):
-        with patch("claude_runtime.find_claude_executable", return_value="/supported/claude"), \
-             patch("claude_runtime.subprocess.run", return_value=subprocess.CompletedProcess([], code, stdout, stderr)):
-            return claude_runtime.run_claude(PRIVATE, "fixture")
+        with patch("pi_runtime.find_pi_runtime", return_value=("node", "pi/index.js")), \
+             patch("pi_runtime.subprocess.run", return_value=subprocess.CompletedProcess([], code, stdout, stderr)):
+            return pi_runtime.run_pi(PRIVATE, "fixture")
 
-    def test_expired_oauth_on_stdout_is_actionable_not_echoed(self):
-        for text in ("OAuth token has expired. ", "Failed to authenticate: expired OAuth token. "):
-            with self.subTest(text=text), self.assertRaises(ClaudeFailure) as error:
-                self.invoke(text + TOKEN + CHAT + PRIVATE, code=1)
-            self.assertIn("claude-auth-required", str(error.exception))
-            self.assertNotIn(TOKEN, str(error.exception))
+    def test_only_known_content_free_errors_reach_logs(self):
+        for value, expected in [("pi-subscription-required", "pi-subscription-required"),
+                                (TOKEN + PRIVATE + CHAT, "pi-provider-failed")]:
+            with self.subTest(value=value), self.assertRaises(ParseFailure) as error:
+                self.invoke(json.dumps({"ok": False, "error": value}), "raw-environment", 1)
+            self.assertEqual(str(error.exception), expected)
+
+    def test_malformed_envelopes_never_echo_diagnostics(self):
+        for value in (PRIVATE + TOKEN, "[]", '{}', '{"ok":true,"text":null}'):
+            with self.subTest(value=value), self.assertRaises(ParseFailure) as error:
+                self.invoke(value, "raw-environment")
             self.assertNotIn(PRIVATE, str(error.exception))
+            self.assertNotIn("raw-environment", str(error.exception))
 
-    def test_failure_diagnostic_uses_exit_and_sizes_only(self):
-        with self.assertRaises(ClaudeFailure) as error:
-            self.invoke(PRIVATE + TOKEN, "raw-environment", 1)
-        self.assertIn("claude-exit-1", str(error.exception))
-        self.assertNotIn(PRIVATE, str(error.exception))
-        self.assertNotIn("raw-environment", str(error.exception))
+    def test_paid_provider_model_api_or_auth_mismatch_fails_closed(self):
+        for key, value in [("provider", "openai"), ("model", "gpt-5.4"), ("auth", "api_key"),
+                           ("api", "openai-responses"), ("ok", False)]:
+            data = pi_envelope("public answer")
+            data[key] = value
+            with self.subTest(key=key), self.assertRaises(ParseFailure):
+                self.invoke(json.dumps(data))
 
-    def test_error_envelope_and_malformed_result_fail(self):
-        for value in ("not json", "[]", '{"is_error":true,"result":"secret"}',
-                      '{"is_error":false,"result":null}', '{"result":"v1"}'):
-            with self.subTest(value=value), self.assertRaises(ClaudeFailure):
-                self.invoke(value)
+    def test_environment_has_no_provider_keys_or_parent_worker_secrets(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": TOKEN, "ANTHROPIC_API_KEY": TOKEN,
+                                     "PI_WORKER_LOCK_TOKEN": PRIVATE, "PI_SESSION_FILE": PRIVATE,
+                                     "HOME": "/existing/service-home", "PI_CODING_AGENT_DIR": "/existing/pi"}):
+            env = pi_runtime.provider_environment()
+        self.assertFalse(set(env) & {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "PI_WORKER_LOCK_TOKEN", "PI_SESSION_FILE"})
+        self.assertEqual(env["PI_CODING_AGENT_DIR"], "/existing/pi")
+        self.assertEqual(env["PI_OFFLINE"], "1")
 
     def test_unavailable_timeout_launch_matrix(self):
-        with patch("claude_runtime.find_claude_executable", return_value=None), self.assertRaises(ClaudeFailure):
-            claude_runtime.run_claude("fixture", "fixture")
-        for error in (subprocess.TimeoutExpired("claude", 1, PRIVATE), OSError(TOKEN)):
-            with patch("claude_runtime.find_claude_executable", return_value="claude"), \
-                 patch("claude_runtime.subprocess.run", side_effect=error), self.assertRaises(ClaudeFailure):
-                claude_runtime.run_claude("fixture", "fixture")
+        with patch("pi_runtime.find_pi_runtime", side_effect=ParseFailure("pi-runtime-unavailable")), self.assertRaises(ParseFailure):
+            pi_runtime.run_pi("fixture", "fixture")
+        for error in (subprocess.TimeoutExpired("node", 1, PRIVATE), OSError(TOKEN)):
+            with patch("pi_runtime.find_pi_runtime", return_value=("node", "pi/index.js")), \
+                 patch("pi_runtime.subprocess.run", side_effect=error), self.assertRaises(ParseFailure):
+                pi_runtime.run_pi("fixture", "fixture")
 
-    def test_json_and_fenced_json_validate(self):
-        for text in (json.dumps(PARSED), "```json\n" + json.dumps(PARSED) + "\n```"):
-            with patch("claude_runtime.run_claude", return_value=text):
-                self.assertEqual(claude_runtime.parse_release("fixture", "fixture"), PARSED)
+    def test_disabled_enrichment_cannot_launch_legacy_or_paid_provider(self):
+        with patch("subprocess.run") as process, redirect_stdout(io.StringIO()):
+            self.assertEqual(enrich.enrich_digest(["v1.0"]), "")
+        process.assert_not_called()
+
+    def test_input_timeout_and_output_bounds(self):
+        for kwargs in ({"prompt": "x" * pi_runtime.MAX_INPUT_BYTES}, {"prompt": ""},
+                       {"timeout": 0}, {"timeout": 121}, {"timeout": True}, {"timeout": float("inf")}):
+            params = {"prompt": "public fixture", "system_prompt": "fixture", **kwargs}
+            with self.subTest(kwargs=list(kwargs)), patch("pi_runtime.find_pi_runtime") as runtime, self.assertRaises(ParseFailure):
+                pi_runtime.run_pi(**params)
+            runtime.assert_not_called()
+        with self.assertRaises(ParseFailure):
+            self.invoke(json.dumps(pi_envelope("x" * (pi_runtime.MAX_OUTPUT_BYTES + 1))))
+
+    def test_json_is_strict_and_schema_bounds_are_checked(self):
+        with patch("pi_runtime.run_pi", return_value=json.dumps(PARSED)):
+            self.assertEqual(pi_runtime.parse_release("fixture", "fixture"), PARSED)
+        with patch("pi_runtime.run_pi", return_value="```json\n" + json.dumps(PARSED) + "\n```"), self.assertRaises(ParseFailure):
+            pi_runtime.parse_release("fixture", "fixture")
+        for parsed in ({**PARSED, "summary": "x" * 351}, {**PARSED, "try_this": ["x"] * 3},
+                       {**PARSED, "categories": {"Improvements": ["x"] * 9}},
+                       {**PARSED, "categories": {"Improvements": ["x"] * 5, "Changes": ["x"] * 4}},
+                       {**PARSED, "categories": {"Changes": ["x" * 81]}}, {**PARSED, "extra": PRIVATE}):
+            with self.subTest(keys=list(parsed)), self.assertRaises(ParseFailure):
+                pi_runtime.validate_release(parsed)
 
 
 class SourceTests(IsolatedTest):
@@ -469,8 +508,8 @@ class SourceTests(IsolatedTest):
 
 
 class BotTests(IsolatedTest):
-    def test_failed_claude_turn_never_stages_commits_pushes_or_logs_content(self):
-        with patch("bot.invoke_claude", side_effect=ClaudeFailure("claude-auth-required")), \
+    def test_failed_pi_turn_never_stages_commits_pushes_or_logs_content(self):
+        with patch("bot.invoke_pi", side_effect=ParseFailure("pi-subscription-required")), \
              patch("bot.send_message") as reply, \
              patch("subprocess.run") as process, redirect_stdout(io.StringIO()) as output:
             bot.handle_message(TOKEN, CHAT, PRIVATE)
@@ -481,7 +520,7 @@ class BotTests(IsolatedTest):
         self.assert_no_leak(output.getvalue())
 
     def test_successful_advisory_does_not_commit_runtime_changes(self):
-        with patch("bot.invoke_claude", return_value="Use a reviewed worker"), \
+        with patch("bot.invoke_pi", return_value="Use a reviewed worker"), \
              patch("bot.send_message"), patch("subprocess.run") as process:
             bot.handle_message(TOKEN, CHAT, "repair digest")
         process.assert_not_called()
@@ -515,7 +554,7 @@ class BotTests(IsolatedTest):
             observed.write_text(json.dumps(digest.load_state()))
             return "advice", True
         def maintenance():
-            with patch("bot.run_claude", side_effect=advisory), patch("bot.send_message"):
+            with patch("bot.run_advisory", side_effect=advisory), patch("bot.send_message"):
                 bot.handle_message(TOKEN, CHAT, PRIVATE)
         first = context.Process(target=cron)
         second = context.Process(target=maintenance)

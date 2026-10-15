@@ -1,77 +1,118 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# Repository guidance
 
 ## What This Is
 
-A daily tech release digest system that fetches release notes from GitHub repos and web changelogs, parses them with Claude CLI, and sends formatted summaries via Telegram. It also includes a Telegram bot that lets you send messages to a headless Claude Code session to modify the repo remotely.
+A daily release digest that fetches GitHub releases and web changelogs, parses
+bounded structured summaries through **Pi OpenAI Codex subscription OAuth**, and
+sends them to Telegram only after validated parsing. The maintenance bot is
+**advisory-only**, not a repository editor or deployment agent.
+
+Chris explicitly chose Pi/Codex instead of Claude authentication. See the
+[recorded decision](docs/decisions/2026-10-15-pi-codex-subscription.md).
+**No Claude invocation, API-key or paid fallback, other model/provider fallback,
+or credential copying is permitted.**
 
 ## Commands
 
 ```bash
-# Run digest (sends to Telegram)
-uv run python digest.py
+# DEFAULT SEND PATH: do not use as a validation command
+uv run --frozen python digest.py
 
-# Preview without sending
-uv run python digest.py --preview
+# No-send preview: no cursor/outbox/session writes
+uv run --frozen python digest.py --preview --sources claude-code,pi
+uv run --frozen python digest.py --list
+uv run --frozen python digest.py --show-state  # counts, not private anchors
 
-# List available sources
-uv run python digest.py --list
-
-# Run for specific sources only
-uv run python digest.py --sources claude-code,cursor
-
-# Show safe cursor counts (does not print private page anchors)
-uv run --frozen python digest.py --show-state
-
-# Inventory candidates without network, Claude, sends or state rewrites
+# Historical candidate inventory only: no network/model calls or state rewrites
 uv run --frozen python recovery_preview.py --baseline-ref <reviewed-ref> --inventory-only
 
-# Bounded catch-up preview ONLY; no send mode exists
+# Bounded catch-up PREVIEW ONLY; baseline must be reviewed, never inferred
 uv run --frozen python recovery_preview.py --baseline-ref <reviewed-ref> --max-pages 3 --max-releases 5
 
-# Offline reliability gate (mocked network/Claude/Telegram)
+# Offline gate: no real provider or Telegram requests
 bash scripts/check.sh
 
-# Run the Telegram bot listener
-uv run python bot.py
+# OPT-IN authenticated provider validation, ISOLATED WORKTREE ONLY:
+# real source GETs and subscription calls; Telegram blocked; content-free receipt
+uv run --frozen python scripts/validate_pi_no_send.py --receipt data/pi-no-send.json
 
-# Cron wrapper (used by systemd/cron)
+# Production listener / cron entrypoints: never start from a worker
+uv run --frozen python bot.py
 ./run_digest.sh
 ```
 
-## Architecture
+## Architecture and safety contract
 
-- **digest.py** — Per-source generation and delivery. Validates parser output; failed fetches/parses remain pending and return a degraded/nonzero result. Explicit `--preview` neither sends nor changes cursor/outbox files.
-- **claude_runtime.py** — PATH-discovered Claude print/JSON adapter, safe mode, no tools/MCP or session persistence; retains supported OAuth/API-key auth. Reports content-free error codes, including expired auth on stdout.
-- **state_store.py** — Legacy cursor normalization, shared `.runtime.lock`, atomic mode-0600 writes with file/directory fsync.
-- **delivery.py** — Frozen `.digest-outbox.json` payloads and per-chunk Telegram JSON acknowledgements. Rejected chunks may retry; acknowledged chunks never re-send. Ambiguous/crash-window sends require operator reconciliation, not automatic retry.
-- **recovery_preview.py** — Read-only historical cursor candidate inventory and bounded archive preview. A cursor is not proof of a delivered summary.
-- **sources.py** — Source configuration and fetching. Two types: `GITHUB_SOURCES` (fetched via GitHub API, tracked by version tags) and `WEB_SOURCES` (HTML changelogs, tracked by content hash). `DEFAULT_SOURCES` in digest.py controls which sources are included.
-- **bot.py** — Advisory-only maintenance listener. Uses the shared lock and tool-free, nonpersistent Claude adapter. Never resumes legacy unsafe sessions, modifies the repository, commits, pushes, deploys or restarts. Repairs belong to isolated reviewed workers.
-- **enrich.py** — Optional web enrichment that searches for community discussion about releases.
-- **prompts/parse-release.md** — Claude prompt for parsing raw release notes into categorized JSON.
-- **telegram_toolkit/** — Telegram API wrapper, reads credentials from `.env`.
-- **state.json** — Persisted version tracking (GitHub tags, web hashes/anchors). Each source is updated only after validated parsing and durable acknowledgements for all of its chunks. Corrupt state fails closed; there is no blind reset command.
+- **digest.py** — Distinct per-source fetch/parse/schema/unchanged/delivery
+  outcomes. Failed sources remain pending and make the run degraded/nonzero.
+  `--preview` never sends or changes cursor/outbox files.
+- **pi_runtime.py**, **scripts/pi_subscription.mjs** — Public Pi `ModelRuntime`
+  invocation from the existing installed Pi package. Explicit
+  `openai-codex/gpt-6.1-sol`, low reasoning, native subscription-only OAuth,
+  fixed Codex API/endpoint and response identity checks. No tools, agent
+  sessions, context/resource discovery, hooks or extensions. No new npm setup.
+- **config/pi-models.json** — Explicit empty provider override config. The
+  supported catalog and OAuth store stay in the actual user's existing Pi
+  directory; they are not copied. Model absence fails closed, not to another
+  model/provider. The child excludes API keys and worker/session secrets.
+- **prompts/parse-release.md** — Strict source-as-data JSON contract. Bounds:
+  192 KiB prompt, 256 KiB frame, 16 KiB result, 64 KiB stream including thinking,
+  120-second deadline, zero request retries; summary <=350 chars, try-this <=2,
+  <=8 category items total. Oversized input fails without truncating versions.
+  Codex ignores `maxTokens`, so do not claim a server-side token cap.
+- **state_store.py** — Deterministic legacy cursor normalization, shared
+  `.runtime.lock`, atomic mode-0600 replacement and file/directory fsync.
+  Corrupt state fails closed, never as an empty cursor. No reset command.
+- **delivery.py** — Frozen `.digest-outbox.json` payloads and per-chunk durable
+  Telegram acknowledgements (`ok: true`, positive integer message ID). Commit
+  a source cursor only after all its chunks are acknowledged. Skip durable acks
+  on retry; explicit rejections may retry, ambiguities/crash windows block for
+  operator reconciliation. Telegram has no idempotency key: do not claim
+  exactly-once delivery or delete an uncertain outbox to retry.
+- **sources.py** — GitHub/web sources with isolated actionable failures. Pi
+  coding-agent releases use `earendil-works/pi`, not the unrelated Pi AI blog.
+- **recovery_preview.py** — Read-only historical candidate inventory and bounded
+  archive preview. Cursors are not delivery receipts; preserve the provisional
+  baseline and unresolved evidence. There is no send/state-rewrite mode.
+- **bot.py** — Shared-lock advisory calls through the same Pi subscription
+  adapter. Never resumes unsafe legacy sessions, edits files, stages, commits,
+  pushes, deploys or restarts. Receipt offsets persist atomically; ambiguous
+  replies do not automatically replay a maintenance turn.
+- **enrich.py** — Community enrichment disabled; no dormant Claude/paid fallback.
+- **telegram_toolkit/** — Telegram configuration/API helpers. Never log tokens,
+  raw exception URLs, chat/session IDs, environments or private release content.
 
-## Key Patterns
-
-- Claude CLI is invoked as a subprocess (`claude -p`) for both digest parsing and bot interactions
-- Telegram messages use HTML parse mode (not Markdown) — use `escape_html()` for user content
-- Messages are bounded to 4000 UTF-16 units, split between balanced HTML lines, with repeated source headers.
-- Cron/send logs contain statuses only, never previews, CLI output, chat/session identifiers or exception URLs. Explicit previews may contain release summaries: do not redirect them into service logs.
-- Automatic bot repository mutation has been intentionally removed; do not reintroduce `git add -A` or direct-main pushes.
+HTML messages are split between balanced lines to <=4000 UTF-16 units with
+repeated source headers. Send/cron logs contain status codes only. Explicit
+previews can contain source summaries: do not redirect them into service logs.
+Historical sensitive logs require preservation-aware reviewed rotation, not
+in-place truncation. Runtime JSON, sessions, credentials and logs must never be
+staged by maintenance automation. Do not reintroduce `git add -A` or main pushes.
 
 ## Isolated shipping contract
 
-Use the current Agent Console repository catalog, not `origin/HEAD` (which may point to a stale branch): default base is **origin/main**, setup is exactly **uv sync --frozen**, shipping is a **reviewed PR targeting main**, auto-merge is false and worker deployment authority is **none**. Reuse an existing claimed owner; infrastructure recovery is not corrective implementation lineage.
+Use the current Agent Console repository catalog, not `origin/HEAD` (which may
+point to a stale branch): base **origin/main**, setup exactly **uv sync --frozen**,
+shipping a **reviewed PR targeting main**, auto-merge false, worker deployment
+and restart authority **none**. Reuse the existing claimed owner; infrastructure
+recovery is not corrective implementation lineage.
 
-Work only in the retained feature worktree. Never copy credentials into it, reset primary runtime state, stage its dirty `state.json`/Beads manifest, invoke its cron wrapper, restart its bot, or send a catch-up digest. Do not run the Gas City setup/ship symlinks in place of the catalog's fixed contract.
+Work only in the retained feature worktree. Never copy credentials into it,
+reset primary runtime state, stage its dirty `state.json`/Beads manifest, invoke
+its cron wrapper, restart its bot or send a catch-up digest. Do not substitute
+Gas City setup/ship symlinks for the catalog's fixed setup and shipping contract.
 
-Before shipping, run `bash scripts/check.sh` plus the fixed catalog gate:
+Run `bash scripts/check.sh` plus the exact fixed catalog gate:
 
 ```bash
 uv run --frozen python -m compileall -q digest.py bot.py enrich.py sources.py telegram_toolkit
 ```
 
-Stage only intended source/test/documentation files, commit on the feature branch, `git fetch origin main`, `git rebase origin/main`, rerun gates after any change, push **only the feature branch**, and open/update a PR with `--base main`. Leave merge, installation, production restarts, credential rotation, catch-up approval and Bead closure to the reviewed handoff. See [td-f5l handoff](docs/td-f5l-handoff.md) for unresolved live-auth/recovery evidence and preservation instructions.
+Stage only intended source/test/docs, commit on the feature branch, fetch origin
+main, rebase onto `origin/main`, rerun gates after changes, push **only the feature
+branch**, and update existing PR #2 with base main. Leave merge, production
+installation, runtime PATH/account verification, service activation/restart,
+log/credential operations, recovery approval and Bead closure to the reviewed
+handoff. See [td-f5l handoff](docs/td-f5l-handoff.md). Claude authentication is no
+longer an installation blocker; the actual cron/service must expose supported
+Node/Pi and the existing subscription store without credential copying.

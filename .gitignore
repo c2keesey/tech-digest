@@ -12,6 +12,7 @@ env/
 # Data
 data/
 *.json
+!config/pi-models.json
 
 # IDE
 .vscode/

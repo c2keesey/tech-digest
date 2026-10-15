@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import time
 
-from claude_runtime import ClaudeFailure, run_claude as invoke_claude
+from pi_runtime import ParseFailure, run_pi as invoke_pi
 from delivery import DeliveryFailure, send_html
 from state_store import StateFailure, atomic_text, runtime_lock
 from telegram_toolkit.telegram import TelegramNotifier
@@ -20,7 +20,7 @@ print = partial(print, flush=True)
 REPO_DIR = Path(__file__).resolve().parent
 OFFSET_FILE = REPO_DIR / ".bot_offset"
 POLL_TIMEOUT = 30
-CLAUDE_TIMEOUT = 300
+MODEL_TIMEOUT = 120
 BACKOFF_BASE = 2
 BACKOFF_MAX = 60
 CONTEXT_PREFIX = (
@@ -71,21 +71,21 @@ def get_updates(bot_token, offset):
         raise DeliveryFailure("bot-poll-failed") from None
 
 
-def run_claude(message_text, session_id=None):
-    # Existing persisted sessions may have unsafe tools/system prompts. Never
-    # resume them; keep their artifacts untouched for the preservation handoff.
+def run_advisory(message_text):
+    # Never resume legacy sessions; preserve their artifacts. The shared Pi
+    # subscription adapter has no tools, agent session or mutation authority.
     try:
-        return invoke_claude(message_text, CONTEXT_PREFIX, CLAUDE_TIMEOUT), True
-    except ClaudeFailure as error:
+        return invoke_pi(message_text, CONTEXT_PREFIX, MODEL_TIMEOUT), True
+    except ParseFailure as error:
         return f"Maintenance unavailable: {error}. No repository changes were made.", False
 
 
 def handle_message(bot_token, chat_id, message_text):
     if message_text.strip().lower() == "/reset":
-        send_message(bot_token, chat_id, "Bot is advisory-only and does not persist Claude sessions.")
+        send_message(bot_token, chat_id, "Bot is advisory-only and does not persist model sessions.")
         return
     with runtime_lock():
-        response, successful = run_claude(message_text)
+        response, successful = run_advisory(message_text)
         # Only content-free diagnostics enter service logs.
         print("Maintenance advisory completed" if successful else "Maintenance advisory failed")
     send_message(bot_token, chat_id, response)
