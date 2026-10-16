@@ -4,6 +4,10 @@
 - **Recorded:** 2026-10-15 UTC.
 - **Status:** implemented and authenticated no-send validation passed in the
   retained isolated worktree; not merged, installed or deployed.
+- **Rechecked 2026-10-16:** [current operator handoff](../td-f5l-operator-handoff.md)
+  records fresh real subscription proof against the primary cursor read-only,
+  72 offline tests, the running listener's actual PATH blocker, supervisor-exit
+  evidence and the separate approvals still needed. Production remains old code.
 
 ## Decision and non-negotiable boundaries
 
@@ -82,7 +86,9 @@ It refuses to run in the protected primary.
 
 ## Remaining review / installation boundaries
 
-1. **Review/merge:** PR #2 remains draft, targeting main, with no auto-merge.
+1. **Review/merge:** PR #2 targets main, with no auto-merge. Fresh evidence makes
+   the code ready for review; requesting review does not authorize merge or
+   complete historical recovery. A maintainer must approve the reviewed merge.
    Review the subscription-only integration and intentional advisory-only bot.
    Original swallowed-release acceptance still lacks a proven delivery baseline;
    the historical August snapshot remains provisional, not approval to rewind
@@ -95,9 +101,12 @@ It refuses to run in the protected primary.
    in the actual cron/service context through a reviewed installation, preserving
    its HOME and existing Pi OAuth store. Do not copy credentials or fall back to
    API keys. Exact Sol catalog availability must also hold in that context.
-   No digest/Telegram-named system/user service was discovered by read-only unit
-   inventory; the listener's approved unit/installation must be identified and
-   its runtime context verified before any activation.
+   **Oct 16 correction:** explicitly connecting to the user bus identified
+   active/running `tech-digest-bot.service` in the primary; its live process PATH
+   also returns `pi-runtime-unavailable` in a worktree-only discovery probe.
+   The prior negative user-unit inventory was incomplete. See the current handoff
+   for the exact unit and actually validated candidate operator environment;
+   installation/configuration and activation remain external approvals.
 3. **Operations:** production checkout/dependency installation, any authorized
    activation/restart, sensitive-log preservation/rotation, historical recovery
    reconciliation and explicit batch delivery approval remain operator actions.

@@ -24,7 +24,7 @@ import bot
 import delivery
 import digest
 from pi_runtime import API, MODEL, PROVIDER, ParseFailure, find_pi_runtime, parse_release, run_pi
-from state_store import atomic_json
+from state_store import StateFailure, atomic_json, normalize_state
 
 PRIMARY = Path("/home/c2k/repos/tech-digest")
 
@@ -39,6 +39,8 @@ def fingerprint(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sources", default="claude-code,pi")
+    parser.add_argument("--observed-state", type=Path,
+                        help="Read-only cursor snapshot for source selection; never a recovery baseline or write target")
     parser.add_argument("--receipt", type=Path, help="Optional content-free receipt under worktree data/")
     args = parser.parse_args(argv)
     if ROOT == PRIMARY.resolve():
@@ -48,7 +50,16 @@ def main(argv=None):
     selected = args.sources.split(",")
     if any(source not in digest.list_sources() for source in selected):
         parser.error("unknown source")
-    protected = [PRIMARY / name for name in ("state.json", ".beads/backup/manifest", ".env",
+    observed_state = None
+    observed_hash = None
+    if args.observed_state:
+        try:
+            observed_bytes = args.observed_state.read_bytes()
+            observed_state = normalize_state(json.loads(observed_bytes))
+            observed_hash = sha256(observed_bytes).hexdigest()
+        except (OSError, ValueError, StateFailure):
+            parser.error("observed state must be readable valid cursor JSON; no empty-state fallback")
+    protected = [PRIMARY / name for name in ("state.json", ".digest-outbox.json", ".beads/backup/manifest", ".env",
                  ".bot_offset", ".bot_session", "logs/digest.log", "logs/error.log", "logs/bot.log", "logs/bot-error.log")]
     runtime = [digest.STATE_FILE, delivery.OUTBOX_FILE, bot.OFFSET_FILE, ROOT / ".bot_session"]
     before_protected = [fingerprint(path) for path in protected]
@@ -56,10 +67,14 @@ def main(argv=None):
     started = time.monotonic()
     receipt = {"timestamp_utc": datetime.now(timezone.utc).isoformat(),
                "provider": PROVIDER, "model": MODEL, "api": API, "auth": "subscription-oauth",
-               "no_api_key_or_paid_fallback": True}
+               "no_api_key_or_paid_fallback": True,
+               "state_basis": "observed-read-only" if args.observed_state else "worktree"}
     generated = []
     real_generate = digest.generate_digest
     def observe(*args, **kwargs):
+        if observed_state is not None:
+            # Pass data in memory, never repoint STATE_FILE/save_state at primary.
+            kwargs["state"] = observed_state
         generation = real_generate(*args, **kwargs)
         generated.append(generation)
         return generation
@@ -74,7 +89,9 @@ def main(argv=None):
             with patch("digest.generate_digest", side_effect=observe), redirect_stdout(io.StringIO()) as preview:
                 receipt["preview_exit"] = digest.main(["--preview", "--sources", args.sources])
             receipt["preview_chars"] = len(preview.getvalue())
+            receipt["preview_sources_checked"] = len(dict.fromkeys(selected))
             receipt["preview_sources_summarized"] = list(generated[0].sections) if generated else []
+            receipt["preview_sources_unchanged"] = generated[0].unchanged if generated else []
             receipt["source_failures"] = generated[0].failures if generated else {}
             advisory = run_pi("Explain the next safe step for a synthetic maintenance request. Do not perform any action.",
                               bot.CONTEXT_PREFIX)
@@ -89,12 +106,15 @@ def main(argv=None):
         receipt["error"] = "validation-failed; raw diagnostics withheld"
     receipt["runtime_files_unchanged"] = before_runtime == [fingerprint(path) for path in runtime]
     receipt["protected_primary_evidence_unchanged"] = before_protected == [fingerprint(path) for path in protected]
+    receipt["observed_state_unchanged"] = (not args.observed_state
+                                           or observed_hash == fingerprint(args.observed_state))
     receipt["elapsed_seconds"] = round(time.monotonic() - started, 2)
     receipt["ok"] = bool(not receipt.get("error") and receipt.get("fixture_version_present")
                          and receipt.get("preview_exit") == 0 and generated
                          and not generated[0].failures and receipt.get("advisory_valid")
                          and receipt.get("telegram_requests") == 0 and receipt.get("notifier_constructions") == 0
-                         and receipt["runtime_files_unchanged"] and receipt["protected_primary_evidence_unchanged"])
+                         and receipt["runtime_files_unchanged"] and receipt["protected_primary_evidence_unchanged"]
+                         and receipt["observed_state_unchanged"])
     if args.receipt:
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
         atomic_json(args.receipt, receipt)

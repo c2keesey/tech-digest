@@ -35,6 +35,10 @@ bash scripts/check.sh
 # OPT-IN authenticated provider validation, ISOLATED WORKTREE ONLY:
 # real source GETs and subscription calls; Telegram blocked; content-free receipt
 uv run --frozen python scripts/validate_pi_no_send.py --receipt data/pi-no-send.json
+# Use an existing cursor read-only for source selection, never as a write target:
+uv run --frozen python scripts/validate_pi_no_send.py \
+  --observed-state /home/c2k/repos/tech-digest/state.json \
+  --receipt data/pi-primary-cursor-no-send.json
 
 # Production listener / cron entrypoints: never start from a worker
 uv run --frozen python bot.py
@@ -110,9 +114,14 @@ uv run --frozen python -m compileall -q digest.py bot.py enrich.py sources.py te
 
 Stage only intended source/test/docs, commit on the feature branch, fetch origin
 main, rebase onto `origin/main`, rerun gates after changes, push **only the feature
-branch**, and update existing PR #2 with base main. Leave merge, production
-installation, runtime PATH/account verification, service activation/restart,
-log/credential operations, recovery approval and Bead closure to the reviewed
-handoff. See [td-f5l handoff](docs/td-f5l-handoff.md). Claude authentication is no
-longer an installation blocker; the actual cron/service must expose supported
-Node/Pi and the existing subscription store without credential copying.
+branch**, and update existing PR #2 with base main. Requesting review is
+permitted after validation; it never authorizes merge or operations. Leave merge,
+production installation, runtime PATH/account verification, service
+activation/restart, log/credential operations, recovery approval and Bead closure
+to the reviewed handoff. See the [current external-operator checklist](docs/td-f5l-operator-handoff.md)
+and [retained recovery evidence](docs/td-f5l-handoff.md). Claude authentication is
+not an installation blocker; both the actual cron and running
+`tech-digest-bot.service` lack discoverable Node/Pi. Production is unchanged until
+an authorized operator installs/configures and separately activates it. Preserve
+the existing subscription store without credential copying; parser approval is
+not catch-up-send approval.
