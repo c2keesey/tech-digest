@@ -24,6 +24,7 @@ import sources
 import state_store
 from pi_runtime import ParseFailure
 from state_store import StateFailure
+from scripts import validate_pi_no_send as validation
 
 ROOT = Path(__file__).resolve().parents[1]
 PARSED = {"summary": "v1.0 → v1.1 • Public fixture feature",
@@ -643,6 +644,73 @@ class RecoveryTests(IsolatedTest):
         self.parse.assert_not_called()
         self.assertEqual(self.state.read_bytes(), self.original)
         self.assertIn("do not prove delivered", output.getvalue())
+
+
+class ValidationTests(IsolatedTest):
+    def setUp(self):
+        super().setUp()
+        self.start_patch("scripts.validate_pi_no_send.PRIMARY", new=self.root / "primary")
+        self.fixture = self.start_patch("scripts.validate_pi_no_send.parse_release",
+                                       return_value={**PARSED, "summary": "v1.0.1 fixture"})
+        self.advisory = self.start_patch("scripts.validate_pi_no_send.run_pi", return_value="advice")
+        sdk = self.root / "pi" / "dist" / "index.js"
+        sdk.parent.mkdir(parents=True)
+        (sdk.parent.parent / "package.json").write_text('{"version":"offline-fixture"}')
+        self.start_patch("scripts.validate_pi_no_send.find_pi_runtime", return_value=("node", str(sdk)))
+        self.observed = self.root / "observed.json"
+        self.observed.write_text(json.dumps({"claude-code": {"seen_versions": ["v1.0", "v1.1"]}}))
+        self.observed_bytes = self.observed.read_bytes()
+
+    def validate(self, path=None):
+        with redirect_stdout(io.StringIO()) as output:
+            result = validation.main(["--sources", "claude-code", "--observed-state", str(path or self.observed)])
+        return result, json.loads(output.getvalue())
+
+    def test_observed_cursor_is_read_only_selection_not_a_state_write_target(self):
+        self.fetch.side_effect = lambda key, seen_versions, **kw: None if "v1.1" in seen_versions else release(key)
+        result, receipt = self.validate()
+        self.assertEqual(result, 0)
+        self.assertEqual(receipt["state_basis"], "observed-read-only")
+        self.assertEqual(receipt["preview_sources_checked"], 1)
+        self.assertEqual(receipt["preview_sources_summarized"], [])
+        self.assertEqual(receipt["preview_sources_unchanged"], ["claude-code"])
+        self.assertTrue(receipt["observed_state_unchanged"])
+        self.assertEqual(self.observed.read_bytes(), self.observed_bytes)
+        self.assertEqual(digest.STATE_FILE, self.state)
+        self.assertEqual(self.state.read_bytes(), self.original)
+        self.assertFalse(self.outbox.exists())
+        self.post.assert_not_called()
+        self.notifier.assert_not_called()
+        self.assert_no_leak(json.dumps(receipt))
+
+    def test_missing_or_corrupt_observed_state_fails_before_any_provider_call(self):
+        for content in (None, "broken", '[]', '{"claude-code":null}'):
+            with self.subTest(content=content):
+                if content is None:
+                    self.observed.unlink(missing_ok=True)
+                else:
+                    self.observed.write_text(content)
+                with patch("sys.stderr", new=io.StringIO()), self.assertRaises(SystemExit) as error:
+                    self.validate()
+                self.assertEqual(error.exception.code, 2)
+        self.fixture.assert_not_called()
+        self.advisory.assert_not_called()
+        self.fetch.assert_not_called()
+        self.assertEqual(self.state.read_bytes(), self.original)
+        self.post.assert_not_called()
+
+    def test_concurrent_observed_state_change_invalidates_receipt(self):
+        def changed(*args, **kwargs):
+            self.observed.write_text('{"claude-code":{"seen_versions":["v1.2"]}}')
+            return "advice"
+        self.advisory.side_effect = changed
+        result, receipt = self.validate()
+        self.assertEqual(result, 1)
+        self.assertFalse(receipt["observed_state_unchanged"])
+        self.assertFalse(receipt["ok"])
+        self.assertEqual(self.state.read_bytes(), self.original)
+        self.assertFalse(self.outbox.exists())
+        self.post.assert_not_called()
 
 
 if __name__ == "__main__":

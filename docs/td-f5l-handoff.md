@@ -1,10 +1,13 @@
 # td-f5l repair and reviewed operational handoff
 
-**Updated 2026-10-15:** Chris chose Pi/Codex subscription instead of Claude
-reauthentication. [Decision and authenticated evidence](decisions/2026-10-15-pi-codex-subscription.md)
-are persisted. The real full-default no-send preview now passes; Claude auth is
-**not** a blocker. Production remains unchanged. Runtime installation, review
-and the unresolved historical delivery baseline still need the reviewed handoff.
+**Updated 2026-10-16:** Production is **still not repaired/installed**. See the
+[current external-operator handoff](td-f5l-operator-handoff.md) for fresh
+subscription validation against the primary cursor **read-only**, the identified
+running `tech-digest-bot.service`, exact cron/service PATH blockers, retained
+supervisor-exit evidence, and separate review/install versus send approvals.
+Chris chose Pi/Codex, not Claude authentication or historical catch-up.
+[Decision](decisions/2026-10-15-pi-codex-subscription.md) and historical evidence
+below are retained; no reset or new recovery baseline is authorized.
 
 ## Scope and retained-owner audit
 
@@ -212,7 +215,7 @@ After reviewed authorization:
 
 ## Shipping and deployment boundary
 
-Repository gate: `bash scripts/check.sh` — **55 Python + 14 Node tests pass**
+Repository gate: `bash scripts/check.sh` — **58 Python + 14 Node tests pass**
 (offline failure matrices, process
 concurrency, parser/state migration, atomic crash-window retries, bot safety,
 no-send end-to-end preview, syntax/compile and whitespace checks). Also run the
@@ -221,8 +224,10 @@ subscription-only auth, wrong-provider/model/API/endpoint refusal, strict schema
 input/output/stream/deadline limits and no fallback after quota/network failures.
 No offline gate runs a real bot listener, provider or Telegram request.
 
-Push only `work/td-f5l-ready-work`; update existing draft PR #2 targeting `main`,
-with no auto-merge. Exact remaining boundaries:
+Push only `work/td-f5l-ready-work`; update existing PR #2 targeting `main`,
+with no auto-merge. The code is ready for review, not a claim of production
+installation or completed historical recovery. Requesting review is allowed;
+merge and operations still require external authorization. Exact boundaries:
 
 1. **Review/merge:** approve the Pi subscription adapter and advisory-only bot.
    Original swallowed-release acceptance still needs a proven-good delivery
@@ -236,9 +241,13 @@ with no auto-merge. Exact remaining boundaries:
    operator must expose the installed supported Node/Pi runtime in cron/service
    PATH, preserve the actual user's HOME/existing Pi OAuth store without copying
    credentials, and verify exact Sol model catalog availability in that context.
-   Read-only system/user unit inventory found no digest/Telegram-named unit;
-   identify and review the listener's real installation/activation method.
-   Interactive-worktree validation does not claim those contexts are installed.
+   **Oct 16 correction:** an explicit user-bus connection identified loaded,
+   active/running `tech-digest-bot.service` in the primary. Its live process PATH
+   also fails Pi discovery. The prior negative user-unit inventory was incomplete,
+   not proof of absence. The exact unit, both runtime probes and an actually
+   validated candidate operator environment are in the
+   [current handoff](td-f5l-operator-handoff.md). None is a production installation
+   claim.
 3. **Operations:** installation into production, any authorized activation/restart,
    preservation-aware sensitive-log rotation, recovery reconciliation and explicit
    bounded catch-up-send approval remain operator actions. Bead closure waits
