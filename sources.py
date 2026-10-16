@@ -14,6 +14,11 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+
+class SourceFailure(RuntimeError):
+    """A content-free diagnostic, distinct from an unchanged source."""
+
+
 # Patterns for dynamic text that changes between fetches without new content
 _DYNAMIC_LINE_RE = re.compile(
     r"^(Updated\s+.+|Last\s+updated.+|Table of contents|All Collections)$",
@@ -64,6 +69,11 @@ GITHUB_SOURCES = {
         "name": "Codex CLI",
         "url": "https://github.com/openai/codex/releases",
     },
+    "pi": {
+        "repo": "earendil-works/pi",
+        "name": "Pi Coding Agent",
+        "url": "https://github.com/earendil-works/pi/releases",
+    },
 }
 
 # Web changelog sources (HTML pages)
@@ -87,10 +97,6 @@ WEB_SOURCES = {
     "chatgpt-app": {
         "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes",
         "name": "ChatGPT App",
-    },
-    "pi": {
-        "url": "https://pi.ai/blog",
-        "name": "Pi",
     },
 }
 
@@ -143,20 +149,30 @@ def _truncate_at_anchor(content: str, anchor: str) -> str:
     return content
 
 
-def fetch_github_releases(repo: str, limit: int = 10) -> list[dict]:
+def fetch_github_releases(repo: str, limit: int = 10, page: int = 1) -> list[dict]:
     """Fetch recent releases from GitHub API."""
     try:
         response = requests.get(
             f"https://api.github.com/repos/{repo}/releases",
-            params={"per_page": limit},
+            params={"per_page": limit, "page": page},
             headers={"Accept": "application/vnd.github+json"},
             timeout=30
         )
         response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"Failed to fetch {repo}: {e}")
-        return []
+        releases = response.json()
+        if not isinstance(releases, list) or any(
+                not isinstance(r, dict) or not isinstance(r.get("tag_name"), str)
+                or not r["tag_name"] or not isinstance(r.get("body") or "", str)
+                for r in releases):
+            raise SourceFailure("github-invalid-releases")
+        return [r for r in releases if not r.get("draft")]
+    except requests.HTTPError as error:
+        code = error.response.status_code if error.response is not None else "unknown"
+        raise SourceFailure(f"github-http-{code}: check source availability/rate limit") from None
+    except requests.RequestException:
+        raise SourceFailure("github-network-failed") from None
+    except ValueError:
+        raise SourceFailure("github-invalid-json") from None
 
 
 def fetch_web_changelog(url: str) -> Optional[str]:
@@ -187,9 +203,11 @@ def fetch_web_changelog(url: str) -> Optional[str]:
         # Take first ~200 lines which should cover recent changes
         return "\n".join(lines[:200])
 
-    except requests.RequestException as e:
-        print(f"Failed to fetch {url}: {e}")
-        return None
+    except requests.HTTPError as error:
+        code = error.response.status_code if error.response is not None else "unknown"
+        raise SourceFailure(f"web-http-{code}: check supported changelog URL") from None
+    except requests.RequestException:
+        raise SourceFailure("web-network-failed") from None
 
 
 def get_release_data(source_key: str, seen_versions: set[str] = None, last_anchor: str = "") -> Optional[ReleaseData]:
@@ -224,7 +242,7 @@ def get_release_data(source_key: str, seen_versions: set[str] = None, last_ancho
         versions = []
         for release in releases:
             version = release.get("tag_name", "unknown")
-            body = release.get("body", "")
+            body = release.get("body") or ""
             content += f"## {version}\n{body}\n\n"
             versions.append(version)
 
@@ -240,8 +258,8 @@ def get_release_data(source_key: str, seen_versions: set[str] = None, last_ancho
         config = WEB_SOURCES[source_key]
         full_content = fetch_web_changelog(config["url"])
 
-        if not full_content:
-            return None
+        if not full_content or not full_content.strip():
+            raise SourceFailure("web-empty-content: check changelog extraction")
 
         # Only send new content (above the anchor from last run) to Claude
         content = _truncate_at_anchor(full_content, last_anchor) if last_anchor else full_content
@@ -255,8 +273,7 @@ def get_release_data(source_key: str, seen_versions: set[str] = None, last_ancho
             content_anchor=_content_anchor(full_content),
         )
 
-    print(f"Unknown source: {source_key}")
-    return None
+    raise SourceFailure("unknown-source: use --list")
 
 
 def list_sources() -> list[str]:
