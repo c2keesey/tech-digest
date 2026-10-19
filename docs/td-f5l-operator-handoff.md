@@ -1,206 +1,179 @@
-# td-f5l / PR #2: external-operator handoff
+# td-f5l / PR #2: executable external-operator handoff
 
-## Current incident status — 2026-10-16 UTC
+## Delivery status — 2026-10-19 UTC
 
-**The production Digest is not repaired yet.** PR #2 contains the retained repair;
-the protected production checkout and running listener still use `781d7af`.
-Passing worktree tests do not install that code or recover swallowed releases.
-Chris authorized Pi/Codex parsing, **not historical catch-up**.
+**Repair and runtime-PATH fix are implemented/validated in the same PR #2;
+production is still `781d7af`, not repaired live.** PR #2 is open, ready for
+review, targeting main, auto-merge disabled. No review/merge/install/activation
+has been performed by this worker. Historical catch-up remains unauthorized.
 
-This is the same Bead, repository owner `0e5025f5b4821403`, feature branch
-`work/td-f5l-ready-work`, and [PR #2](https://github.com/c2keesey/tech-digest/pull/2).
-No duplicate issue, worker, PR or corrective infrastructure lineage was created.
+**External operator availability:** no approved Digest deployment dispatcher or
+assigned external operator is exposed by the current catalog/application
+contract. The catalog specifies `reviewed-pull-request`, `autoMerge: false`,
+`workerAuthority: none`, `pull-request-handoff-only`; it has no deployment hook.
+`pi-worker handoff` sends an owner-completion message after merge, **not** an
+installation/restart request. Agent Console's own promotion machinery is not a
+Digest operator. No such hook was invoked, no duplicate owner was created, and
+this worker must not impersonate an external operator by clearing its identity.
+A human must designate/authorize the external `c2k` login described below.
 
-### Fresh, real no-send proof
+## Concrete PATH blocker fixed in code
 
-| Run (UTC) | Cursor basis | Real source result | Subscription fixture/advisory | Telegram |
-| --- | --- | --- | --- | --- |
-| Oct 16 14:08:14 | Retained worktree | 11 checked; 10 summarized, Granola unchanged; exit 0 | Both passed | 0 requests, 0 notifier constructions |
-| Oct 16 14:12:57 | **Primary cursor read-only, in memory** | 11 checked; **Pydantic AI and Pi summarized**, 9 unchanged; exit 0 | Both passed | 0 requests, 0 notifier constructions |
-| Oct 16 14:15:21 | Primary cursor + minimal candidate operator environment | Same 2 summarized / 9 unchanged; exit 0 | Both passed | 0 requests, 0 notifier constructions |
+`config/pi-runtime.json` explicitly pins the existing supported Node/Pi bin
+directory to `~/.nvm/versions/node/v24.13.0/bin`. `pi_runtime.find_pi_runtime()`
+uses that exact pair, resolves the installed Pi CLI to its public SDK, validates
+the package name, and fails closed if the pair/config/SDK is unavailable. It
+never sources an interactive shell, chooses a version by glob, trusts a PATH
+wrapper, installs software, copies credentials, or falls back to another model
+or provider. Both cron parsing and the advisory-only bot use this adapter.
 
-All three used installed Pi **0.84.1**, explicit `openai-codex/gpt-6.1-sol`,
-`openai-codex-responses`, existing subscription OAuth, no API keys/paid fallback.
-There were no fetch/parse failures. Runs took 89.06s, 26.39s and 26.77s respectively.
-All fingerprinted worktree runtime files and primary state, outbox, manifest,
-credentials, offsets/sessions and logs were unchanged. No provider transcript,
-release body or credential was persisted. Local mode-0600 receipts:
+**No cron/service PATH edit is now required for this installed runtime.** This
+supersedes the Oct 16 handoff's proposed machine-configuration PATH edits. The
+existing service-user HOME/OAuth/catalog store remains in place. A future move
+of the installed runtime requires reviewing the public runtime pin, not silently
+finding another executable. The supported model is still explicitly
+`openai-codex/gpt-6.1-sol`, subscription OAuth only, with bounded structured JSON,
+no API keys, paid fallback, tools or agent sessions. ACK-only cursors/outbox and
+shared locks are unchanged.
 
-- `data/pi-codex-all-sources-2026-10-16.json`
-- `data/pi-codex-primary-cursor-2026-10-16.json`
-- `data/pi-codex-operator-env-2026-10-16.json`
+## Actual authenticated no-send proof
 
-The validator now accepts `--observed-state`: it reads and normalizes that file
-once, passes data to generation in memory, **never changes `STATE_FILE` or any
-write target**, and rejects missing/corrupt inputs before inference. An observed
-file change invalidates the receipt. This is source-selection evidence, not an
-outbox reconciler or historical-delivery proof. In particular, nine unchanged
-sources may still include previously swallowed releases: cursors are not ACKs.
+Installed Pi **0.84.1**, real source GETs and subscription inference, primary
+cursor read once **read-only in memory**, all 11 default sources:
 
-Offline: **58 Python + 14 Node tests (72 total)** pass, including three new
-observed-state safety tests. `bash scripts/check.sh` and the exact catalog
-compile gate pass. Existing ACK-only locks/outbox, advisory-only bot, no-key and
-no-fallback constraints are unchanged.
+| UTC start, Oct 19 | Environment used in isolated worktree | Result |
+| --- | --- | --- |
+| 14:20:29 | `env -i`, HOME `/home/c2k`, **PATH `/usr/bin:/bin` only** | fixture + preview + advisory passed; 26.76s |
+| 14:22:28 | Nonsecret HOME/PATH/context from the actual running listener's Python process; Node prefix absent from PATH | same checks passed; 24.47s |
 
-## Exact remaining gates and who must authorize them
+Each: **Pydantic AI and Pi summarized; nine sources unchanged**, exit 0,
+no fetch/parse failures, **zero Telegram requests and notifier constructions**.
+Worktree runtime files and primary state/outbox/manifest/credentials/sessions/
+offsets/log fingerprints were unchanged. No provider transcripts, release text
+or credentials were persisted. Receipts (ignored, mode 0600):
 
-### 1. Reviewed merge — repository maintainer, not this worker
+- `data/pi-codex-minimal-path-2026-10-19.json`
+- `data/pi-codex-live-unit-env-2026-10-19.json`
 
-The catalog requires a **reviewed PR to `main`**, `autoMerge: false`, deployment
-policy `pull-request-handoff-only`, worker deployment/restart authority **none**.
-It does not prohibit requesting review by removing draft status. With fresh
-provider/offline proof, the code is ready **for review**, not production-certified
-or original-Bead-complete. Marking PR #2 ready for review does not authorize
-merge, installation or sends. Check the current PR head before approving.
+Nine unchanged cursors are not proof of historical delivery. The potentially
+swallowed-release inventory/provisional baseline in
+[the retained recovery handoff](td-f5l-handoff.md) is unchanged.
 
-A human/repository-designated reviewer must approve the subscription-only
-adapter, ACK-only delivery and intentionally advisory-only listener, then a
-maintainer must explicitly authorize/perform the reviewed merge. At this audit
-there were **no submitted reviews**, no auto-merge, and GitGuardian passed on
-`224f49a`. An unprotected GitHub branch/admin permission is **not** permission to
-bypass the catalog review requirement. No worker merge is permitted.
+Offline: **73 Python + 14 Node tests = 87 passing**. Five new runtime-discovery
+tests and ten new external-install safety tests supplement the retained ACK,
+crash-window, concurrency, migration, failure and no-paid-fallback matrices.
+`bash scripts/check.sh` and the exact catalog compile gate pass. Real production
+installation via the new helper has **not** been executed; its apply path was
+validated only with isolated offline fixtures.
 
-Historical recovery remains an open acceptance item on original `td-f5l`; do not
-close it simply because the code PR is merged. Review may accept installation of
-the forward-path repair separately without approving historical sends.
+## Exactly what the human must approve/do
 
-### 2. Production installation/configuration — named external operator
+1. **Review and manually merge the exact latest PR #2 head**, including the
+   explicit runtime pin and guarded installer. No submitted GitHub reviews were
+   present at audit. Administrative access/unprotected main is not permission to
+   skip catalog review. PR readiness is not automatic merge authorization.
+2. **Name/authorize an external `c2k` operator on `c2k-optiplex`**, outside the
+   worker/Agent Console process context, for a no-send maintenance window:
+   pause only the Digest cron entry, stop only `tech-digest-bot.service`, preserve
+   state/outbox/history/manifest/credentials/logs, fast-forward the primary to
+   the reviewed merged commit, run `uv sync --frozen`, and validate without sends.
+   Record the approval reference. This is not activation/catch-up authorization.
+3. **After installation**, separately approve activation and the exact fresh
+   first-run pending batch/outbox reconciliation. No activation command is
+   supplied or run here. Historical recovery additionally requires trusted
+   last-good Telegram/history evidence, duplicate reconciliation, an exact
+   bounded preview and explicit batch-send approval. No cursor reset/pre-seeding.
 
-Read-only host evidence on **`c2k-optiplex`**:
+Suggested approval wording (a request, **not an already granted approval**):
 
-- Primary HEAD: `781d7af6b6d4b8aabd16269cb3813a057237e913` (old implementation).
-- One active crontab entry invokes the primary `run_digest.sh`; the crontab has
-  **no explicit PATH**. A `/usr/bin:/bin` discovery probe of the new adapter in
-  the worktree returns **`pi-runtime-unavailable`**.
-- **`systemctl --user` unit `tech-digest-bot.service` is loaded, active/running**,
-  fragment `/home/c2k/.config/systemd/user/tech-digest-bot.service`, working
-  directory `/home/c2k/repos/tech-digest`, `uv run ... bot.py` entrypoint. Main
-  `uv` PID 1297 and Python child 1523 were observed; these PIDs are not stable.
-- Its live Python process has HOME `/home/c2k` and a PATH containing the primary
-  `.venv/bin` and system paths, **not the installed Node/Pi directory**. A
-  worktree-only discovery probe using only that process's nonsecret runtime
-  environment also returns **`pi-runtime-unavailable`**.
-- Working interactive Node/Pi prefix:
-  `/home/c2k/.nvm/versions/node/v24.13.0/bin`. Do not rely on interactive shell
-  startup or assume `~/.local/bin/pi` alone exposes the public SDK/runtime.
+> I reviewed PR #2 head `<40-char SHA>` and approve its manual merge. I authorize
+> `c2k` in an external login on c2k-optiplex for the documented no-send maintenance
+> installation, including pausing Digest cron and stopping its bot. Leave both
+> paused/stopped after installation; do not activate, reset cursors, send any
+> catch-up or copy credentials. Approval record: `<reference>`.
 
-**Correction to the Oct 15 handoff:** the earlier “no digest/Telegram user unit
-found” observation was incomplete. The current worker initially lacked a user
-bus environment; explicitly connecting to `/run/user/1000/bus` made the real
-unit observable. The listener installation method is now identified; its
-runtime PATH is an evidenced blocker, not an unidentified service.
+### Executable commands — designated external operator only
 
-Required operator plan, **not executed and not authorized by parser approval**:
-
-1. Obtain explicit approval for a production no-send maintenance window, the
-   named installer, runtime PATH/configuration changes, and preservation-aware
-   log handling. Coordinate/pause the existing scheduler/listener only under
-   that separate operational authorization; old running code does not honor the
-   new shared lock. Do not restart Agent Console or any unrelated service.
-2. Preserve the primary's dirty cursor, manifest, outbox if present, offsets,
-   sessions and sensitive logs. Record fresh hashes privately; retain restricted
-   state/outbox/log evidence. Leave credentials in place: **never copy `.env`,
-   Pi `auth.json` or tokens**, including into a worktree or deployment bundle.
-3. After the exact PR is reviewed/merged, inspect the merge diff for runtime
-   paths and install only the approved main commit. This PR does not change
-   `state.json` or the Beads manifest. Use a preservation-aware fast-forward,
-   never `reset --hard`, runtime-file stashing/cleanup or blanket staging. If
-   another automation changes the branch or a runtime path conflicts, stop and
-   reconcile rather than overwrite it. Run the reviewed frozen dependency setup
-   only as part of that authorized installation.
-4. Review the machine configuration source in `~/repos/dotfiles` and installed
-   user-unit configuration; expose the supported Node/Pi prefix in **both** cron
-   and listener PATH (not only the current terminal). Keep actual-user HOME and
-   its existing supported Pi OAuth/catalog store. No credentials copied, paid
-   provider or model substitution; absent Sol/OAuth must fail closed.
-5. Re-run no-send validation from the retained worktree with the **approved
-   runtime environment**, then verify the installed commit, both effective
-   environments and preservation fingerprints. A worktree receipt is not proof
-   that the unit/cron configuration was applied. Keep send paths paused until
-   the next gate is explicitly approved. Any unit reload/restart/activation is
-   a separately authorized external-operator action, never a worker action.
-
-Reproducible **no-send** check (isolated worktree only; real source GETs and
-subscription calls; no credential setup):
+Use the retained worktree. Do **not** reset/rebase it to main or copy credentials.
+Run the merge command only after actual human review/merge authorization, then
+run the installer only after the separately recorded maintenance authorization.
+If PR #2 has already been merged by the maintainer, omit the merge command.
 
 ```bash
+set -euo pipefail
 cd /home/c2k/repos/tech-digest.work-td-f5l-ready-work
-# These values describe the working approved-candidate runtime, not an install.
-# The operator must also verify the eventual cron and unit effective PATH/HOME.
-env -i HOME=/home/c2k USER=c2k LOGNAME=c2k LANG=C.UTF-8 \
-  PATH=/home/c2k/.nvm/versions/node/v24.13.0/bin:/home/c2k/.local/bin:/usr/bin:/bin \
-  /home/c2k/.local/bin/uv run --frozen python scripts/validate_pi_no_send.py \
-  --observed-state /home/c2k/repos/tech-digest/state.json \
-  --sources claude-code,claude-app,cursor,linear,pydantic-ai,granola,agent-deck,beads,gas-city,codex,pi \
-  --receipt "data/operator-no-send-$(date -u +%Y%m%dT%H%M%SZ).json"
+read -r -p 'Paste the exact reviewed PR2 head SHA: ' REVIEWED_HEAD
+[[ "$REVIEWED_HEAD" =~ ^[0-9a-f]{40}$ ]]
+read -r -p 'Recorded external no-send maintenance approval reference: ' APPROVAL
+[[ -n "$APPROVAL" ]]
+
+# Manual maintainer merge, NOT auto-merge, NOT a worker command.
+gh api --method PUT repos/c2keesey/tech-digest/pulls/2/merge \
+  -f sha="$REVIEWED_HEAD" -f merge_method=squash --jq '.merged' | grep -Fx true
+
+# Read-only preflight; blocked until PR2 is merged at this reviewed head.
+/usr/bin/python3 scripts/external_operator_install.py \
+  --approved-head "$REVIEWED_HEAD"
+
+# Explicit EXTERNAL operator action; never run this from the worker.
+/usr/bin/python3 scripts/external_operator_install.py --apply \
+  --approved-head "$REVIEWED_HEAD" --approval-reference "$APPROVAL"
 ```
 
-This minimal-environment command was actually validated at 14:15:21 UTC; it
-proves the proposed runtime works without inherited worker secrets, not that
-cron/service PATH has been installed. Do not overwrite prior evidence. If the
-existing actual account uses a supported explicit Pi agent-dir
-setting, preserve that context in the reviewed configuration without copying
-its contents. Never run `digest.py` without `--preview`, `bot.py`, or
-`run_digest.sh` as validation. Do not redirect source previews into service logs.
+The helper rejects worker identity/Agent Console cgroups **before subprocesses
+or file creation** on `--apply`. It requires the correct host/account, exact
+merged PR2 head/repository/base, clean retained source, primary branch main,
+expected origin, no staged/other dirty tracked files, reviewed merged tree,
+fast-forward ancestry and no runtime paths in the installation diff. Existing
+dirty `state.json` and Beads manifest are explicitly allowed and preserved.
 
-### 3. Activation / first-run sends / historical recovery — separate human gate
+Under an installer lock it comments **only** the existing Digest crontab line
+(never removes unrelated jobs), stops **only** the listener, rejects in-flight
+Digest processes instead of killing/replaying them, and fingerprints protected
+runtime files/logs. It fetches main and fast-forwards only to the exact reviewed
+merged tree. Per-command Git hooks are suppressed solely to avoid incidental
+Beads backup writes during installation, not to bypass review/tests. No hard
+reset, stash, cleanup, runtime-file overwrite, credential copy or log rotation.
+After frozen setup it runs the real no-send validator from the **worktree**, with
+system-only PATH, against primary cursors read-only, then checks preservation.
+It never invokes the default send/cron entrypoint or starts/restarts a service.
 
-Installing code is not approval to deliver a backlog. At the read-only primary
-cursor snapshot, Pydantic AI and the **new Pi GitHub source** had pending current
-batches. These change with time and are not an approved send list. The operator
-must review the exact fresh pending batch and any frozen outbox, reconcile
-`inflight`/`uncertain` chunks against trusted Telegram evidence, and receive
-explicit activation/first-run-send approval before resuming scheduled delivery.
-Do not mark unseen versions seen to hide the pending batch or delete an outbox.
+Success writes a mode-0600 handoff record with the exact installed commit,
+reviewed head, approval-reference fingerprint and no-send receipt path, and emits
+`cron_paused: true`, `listener_stopped: true`, `activation_authorized: false`.
+It rechecks the paused crontab, inactive listener and absence of in-flight Digest
+processes before installation and before reporting success.
+If maintenance fails, stop and preserve the reported partial state; it deliberately
+never rolls back dirty runtime files or automatically resumes delivery. The
+maintenance marker remains in crontab for explicit subsequent activation review.
+The helper does not rotate sensitive logs or close original `td-f5l`.
 
-Historical catch-up is still **unauthorized**. Need trusted Telegram/history
-evidence of a last proven good summary, reviewed duplicate reconciliation, an
-exact bounded preview and explicit batch-delivery approval. `e45ec38` is only a
-provisional inventory boundary; do not turn it into a proven recovery baseline.
-The read-only primary cursor used above is not a new recovery baseline either.
-See [the retained inventory/reconciliation handoff](td-f5l-handoff.md). No reset,
-catch-up send or Bead closure is included in Pi parser approval.
+## Bounded retained supervisor-exit / branch evidence
 
-## Retained supervisor-exit evidence (not an application/provider diagnosis)
+Same owner `0e5025f5b4821403`, same Bead, worktree, feature branch and PR. Current
+attempt **5** began `2026-10-19T14:11:23.461Z`. Retained owner state records prior
+`recoverySource.phase: failed`, error **“worker supervisor exited unexpectedly;
+the worktree and session were retained for recovery”**, inherited
+`failureCode: supervisor_exit`. This is not a claim that the current live attempt
+is failed. `supervisor.log` remains empty. A bounded prior-attempt unit-journal
+query found a start only, no exit cause/status. The older Oct 14 Pi exit 143 does
+not identify this exit. No OOM/timeout/authentication cause is invented.
 
-The retained repository-scoped owner state at
-`~/.local/state/agent-console/pi-workers/0e5025f5b4821403/td-f5l/state.json`
-records:
+Before worker actions, the reflog again showed a reset to `781d7af` at
+`2026-10-19T14:11:31Z`, despite PR/remote head **`78f986f`**. The worker inspected
+that exact head and all three retained unique commits; divergence was **0 local /
+3 remote commits**, then restored by **fast-forward**, not reset. Existing locks
+and evidence were retained, no new setup/owner/lineage. The reset and supervisor
+exit are separate observations; causation is not established. Future supervisor
+reuse must reconcile PR/unique work before moving refs. Infrastructure recovery
+is not a new corrective Digest implementation.
 
-- `recoverySource.phase: failed`;
-- `recoverySource.error: "worker supervisor exited unexpectedly; the worktree and session were retained for recovery"`;
-- inherited `failureCode: supervisor_exit`; **not** a claim that the current
-  live attempt is failed;
-- the same retained worktree, branch and owner; current supervisor attempt **4**
-  began `2026-10-16T14:06:24.305Z` (`events.jsonl`, `supervisor_start`, recover true).
+Current continuation's initial/final protected baseline (not restore targets):
 
-The prior attempt began `2026-10-15T04:51:12.608Z`. The supervisor log is empty;
-the bounded prior-attempt journal query only established a start, not an exit
-cause/status. The older `pi_exit` code **143** at `2026-10-14T15:54:08.201Z`
-belongs to an earlier attempt and is **not evidence of the Oct 15 exit cause**.
-Do not invent a timeout/OOM/authentication cause or corrective lineage.
+- Primary `state.json`: `ab2cb182e2fccb32acfe2f0681fbd37e1344311adee07a11ee2255c63cfeae95`
+- Beads manifest: `4e9630cb7dbb482b732d243c7938acd8e3ac77f65a045afad7651e1109122767`
+- Primary outbox absent at audit; preserve any later outbox, never delete it to retry.
 
-At worker entry the feature branch had again been reset to `origin/main`
-(`781d7af`), with a reflog timestamp `2026-10-16T14:06:31Z`; PR #2 and its remote
-feature branch still retained `224f49a`. After fetching, divergence was **0 local /
-2 remote commits**. The worker fast-forwarded the same branch to that exact PR
-head, without reset, cleanup, duplicated implementation or new setup. Lock and
-evidence artifacts were preserved. This reset is observed separately from the
-supervisor-exit report; causation is not established. Future supervision must
-reconcile the actual PR head before any retained-base reuse. Infrastructure
-investigation belongs to the existing supervisor's handoff, not a new td Bead.
-
-## Preservation baseline for this continuation
-
-The primary changed between sessions; old hashes are evidence, not restore
-instructions. Current initial/final validation hashes:
-
-- `state.json`: `d02f57c6c4dd7260f879189f95472e66cf0674777f5a73722cda81e0d044b7ea`
-- `.beads/backup/manifest`: `4e9630cb7dbb482b732d243c7938acd8e3ac77f65a045afad7651e1109122767`
-- Primary outbox absent at audit; do not create/reset one to make an installation
-  look clean. Preserve any outbox appearing later and re-review the fresh state.
-
-Dirty primary `state.json`, manifest and the existing gate-lock artifact remain
-untouched. No worker operation changed services, cron, secrets, logs, delivery
-state or recovery baseline. **Production remains unchanged until the explicitly
-authorized external-operator installation/activation is verified.**
+Primary remains on `781d7af` with its dirty cursor/manifest and existing gate lock.
+No worker merge, installation, service operation, cron change, send/reset,
+credential copy, recovery-baseline change or Agent Console deployment occurred.

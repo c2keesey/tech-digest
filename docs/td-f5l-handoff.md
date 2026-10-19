@@ -1,10 +1,13 @@
 # td-f5l repair and reviewed operational handoff
 
-**Updated 2026-10-16:** Production is **still not repaired/installed**. See the
-[current external-operator handoff](td-f5l-operator-handoff.md) for fresh
-subscription validation against the primary cursor **read-only**, the identified
-running `tech-digest-bot.service`, exact cron/service PATH blockers, retained
-supervisor-exit evidence, and separate review/install versus send approvals.
+**Updated 2026-10-19:** Production is **still not repaired/installed**. See the
+[current executable external-operator handoff](td-f5l-operator-handoff.md).
+The cron/service PATH blocker is now fixed **in code** with an explicit validated
+installed Node/Pi pin, proved by real subscription calls with system-only PATH
+and the actual listener environment, against primary cursors **read-only**.
+87 offline tests pass. No approved Digest external dispatcher exists; the exact
+manual merge/install commands, guarded no-send installer, current supervisor-exit
+evidence and separate activation/historical-send approvals are documented.
 Chris chose Pi/Codex, not Claude authentication or historical catch-up.
 [Decision](decisions/2026-10-15-pi-codex-subscription.md) and historical evidence
 below are retained; no reset or new recovery baseline is authorized.
@@ -215,7 +218,7 @@ After reviewed authorization:
 
 ## Shipping and deployment boundary
 
-Repository gate: `bash scripts/check.sh` — **58 Python + 14 Node tests pass**
+Repository gate: `bash scripts/check.sh` — **73 Python + 14 Node tests pass**
 (offline failure matrices, process
 concurrency, parser/state migration, atomic crash-window retries, bot safety,
 no-send end-to-end preview, syntax/compile and whitespace checks). Also run the
@@ -235,19 +238,16 @@ merge and operations still require external authorization. Exact boundaries:
    Review pending first-run batches (especially the new Pi GitHub cursor) before
    enabling scheduled sends; never pre-seed seen cursors to hide the backlog.
    Claude authentication/API-key provisioning is no longer a blocker or action.
-2. **Production installation:** one digest cron entry has no explicit PATH.
-   A `/usr/bin:/bin` runtime-discovery probe returns `pi-runtime-unavailable`;
-   the existing local Pi wrapper is not sufficient in that context. A reviewed
-   operator must expose the installed supported Node/Pi runtime in cron/service
-   PATH, preserve the actual user's HOME/existing Pi OAuth store without copying
-   credentials, and verify exact Sol model catalog availability in that context.
-   **Oct 16 correction:** an explicit user-bus connection identified loaded,
-   active/running `tech-digest-bot.service` in the primary. Its live process PATH
-   also fails Pi discovery. The prior negative user-unit inventory was incomplete,
-   not proof of absence. The exact unit, both runtime probes and an actually
-   validated candidate operator environment are in the
-   [current handoff](td-f5l-operator-handoff.md). None is a production installation
-   claim.
+2. **Production installation:** the Oct 16 PATH failure is superseded by the
+   reviewed runtime pin in `config/pi-runtime.json`. The actual listener
+   environment and system-only PATH now pass real subscription no-send checks
+   in the worktree; no cron/service PATH edit is needed. This does not install
+   code in the primary. No approved external Digest dispatcher exists; a human
+   must authorize/designate an external installer after reviewed merge. The
+   [current executable handoff](td-f5l-operator-handoff.md) includes exact
+   commands and a guarded no-send installation helper that preserves dirty
+   runtime evidence and leaves cron paused/listener stopped. No worker merge,
+   install, restart or activation authority is granted.
 3. **Operations:** installation into production, any authorized activation/restart,
    preservation-aware sensitive-log rotation, recovery reconciliation and explicit
    bounded catch-up-send approval remain operator actions. Bead closure waits

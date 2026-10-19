@@ -50,8 +50,10 @@ uv run --frozen python bot.py
 - **digest.py** — Distinct per-source fetch/parse/schema/unchanged/delivery
   outcomes. Failed sources remain pending and make the run degraded/nonzero.
   `--preview` never sends or changes cursor/outbox files.
-- **pi_runtime.py**, **scripts/pi_subscription.mjs** — Public Pi `ModelRuntime`
-  invocation from the existing installed Pi package. Explicit
+- **pi_runtime.py**, **scripts/pi_subscription.mjs**, **config/pi-runtime.json** —
+  Public Pi `ModelRuntime` invocation from the explicit reviewed installed Node/Pi
+  pair, independent of cron/service PATH. No wrapper/shell/version-glob discovery;
+  a missing pair/config/SDK fails closed. Explicit
   `openai-codex/gpt-6.1-sol`, low reasoning, native subscription-only OAuth,
   fixed Codex API/endpoint and response identity checks. No tools, agent
   sessions, context/resource discovery, hooks or extensions. No new npm setup.
@@ -120,8 +122,14 @@ production installation, runtime PATH/account verification, service
 activation/restart, log/credential operations, recovery approval and Bead closure
 to the reviewed handoff. See the [current external-operator checklist](docs/td-f5l-operator-handoff.md)
 and [retained recovery evidence](docs/td-f5l-handoff.md). Claude authentication is
-not an installation blocker; both the actual cron and running
-`tech-digest-bot.service` lack discoverable Node/Pi. Production is unchanged until
-an authorized operator installs/configures and separately activates it. Preserve
+not an installation blocker. The reviewed runtime pin now works even with the
+actual listener environment or system-only PATH; installing this PR fixes that
+blocker without cron/service PATH edits. Production is unchanged until an
+external operator installs the reviewed merge and separately activates it.
+No approved Digest external dispatcher is configured. The guarded
+`scripts/external_operator_install.py` is an executable handoff for an explicitly
+authorized external login, **not worker deployment authority**; its read-only
+default requires an exact reviewed head, and `--apply` is forbidden here. It
+leaves cron paused/listener stopped and never starts/restarts or sends. Preserve
 the existing subscription store without credential copying; parser approval is
-not catch-up-send approval.
+not installation, activation or catch-up-send approval.

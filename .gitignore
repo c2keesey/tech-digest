@@ -13,6 +13,7 @@ env/
 data/
 *.json
 !config/pi-models.json
+!config/pi-runtime.json
 
 # IDE
 .vscode/

@@ -4,10 +4,13 @@
 - **Recorded:** 2026-10-15 UTC.
 - **Status:** implemented and authenticated no-send validation passed in the
   retained isolated worktree; not merged, installed or deployed.
-- **Rechecked 2026-10-16:** [current operator handoff](../td-f5l-operator-handoff.md)
-  records fresh real subscription proof against the primary cursor read-only,
-  72 offline tests, the running listener's actual PATH blocker, supervisor-exit
-  evidence and the separate approvals still needed. Production remains old code.
+- **Rechecked 2026-10-19:** [current executable operator handoff](../td-f5l-operator-handoff.md)
+  records fresh real subscription proof with system-only PATH and the actual
+  listener environment, against primary cursors read-only. The explicit reviewed
+  `config/pi-runtime.json` Node/Pi pin resolves the prior PATH blocker in code;
+  no machine PATH edits are needed. 87 offline tests pass. No approved external
+  Digest dispatcher exists: human review/merge and a named external no-send
+  installer are still needed. Production remains old code.
 
 ## Decision and non-negotiable boundaries
 
@@ -95,18 +98,16 @@ It refuses to run in the protected primary.
    or re-send. Current successful previews do not prove historical delivery.
    Review first-run pending batches, particularly Pi's new GitHub source, before
    enabling scheduled sends; do not pre-seed cursors as seen to hide a backlog.
-2. **Runtime installation:** the existing digest cron has one entry and no
-   explicit PATH. A `/usr/bin:/bin` discovery probe returns
-   `pi-runtime-unavailable`: expose the existing supported Node/Pi installation
-   in the actual cron/service context through a reviewed installation, preserving
-   its HOME and existing Pi OAuth store. Do not copy credentials or fall back to
-   API keys. Exact Sol catalog availability must also hold in that context.
-   **Oct 16 correction:** explicitly connecting to the user bus identified
-   active/running `tech-digest-bot.service` in the primary; its live process PATH
-   also returns `pi-runtime-unavailable` in a worktree-only discovery probe.
-   The prior negative user-unit inventory was incomplete. See the current handoff
-   for the exact unit and actually validated candidate operator environment;
-   installation/configuration and activation remain external approvals.
+2. **Runtime installation:** the prior PATH failure is now fixed in the PR by
+   the explicit validated installed Node/Pi pair in `config/pi-runtime.json`;
+   real no-send calls passed with `/usr/bin:/bin` and the actual running
+   `tech-digest-bot.service` environment. This supersedes the earlier proposal
+   for machine PATH edits, not the installation boundary. Install only the
+   reviewed merged code via a separately authorized external operator, preserving
+   HOME and the existing OAuth/catalog store. No credentials copied, API keys or
+   model/provider fallback. The guarded external helper leaves delivery paused;
+   activation still needs separate approval. No approved Digest deployment
+   dispatcher is configured. See the executable handoff.
 3. **Operations:** production checkout/dependency installation, any authorized
    activation/restart, sensitive-log preservation/rotation, historical recovery
    reconciliation and explicit batch delivery approval remain operator actions.

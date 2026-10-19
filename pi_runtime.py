@@ -4,7 +4,6 @@ import json
 import math
 import os
 from pathlib import Path
-import shutil
 import subprocess
 
 PROVIDER = "openai-codex"
@@ -17,6 +16,7 @@ MAX_REQUEST_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 16 * 1024
 MAX_TIMEOUT = 120
 HELPER = Path(__file__).resolve().parent / "scripts" / "pi_subscription.mjs"
+RUNTIME_CONFIG = HELPER.parent.parent / "config" / "pi-runtime.json"
 SAFE_ERRORS = {
     "pi-invalid-request", "pi-input-too-large", "pi-runtime-unavailable",
     "pi-subscription-required", "pi-model-unavailable", "pi-provider-mismatch",
@@ -29,28 +29,30 @@ class ParseFailure(RuntimeError):
 
 
 def find_pi_runtime():
-    executable = shutil.which("pi")
-    if not executable:
-        candidate = Path.home() / ".local/bin/pi"
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            executable = str(candidate)
-    if not executable:
-        raise ParseFailure("pi-runtime-unavailable")
-    entry = Path(executable).resolve()
-    sdk = entry.parent / "index.js"
-    node = Path(executable).parent / "node"
-    if not node.is_file() or not os.access(node, os.X_OK):
-        node_path = shutil.which("node")
-        if not node_path:
-            raise ParseFailure("pi-runtime-unavailable")
-        node = Path(node_path)
+    # Cron and the bot inherit a system-only PATH. Resolve one reviewed installed
+    # Node/Pi pair explicitly, not an interactive shell, wrapper, version glob or
+    # alternate provider. Missing/broken configuration fails closed.
     try:
+        config = json.loads(RUNTIME_CONFIG.read_text())
+        if (not isinstance(config, dict) or set(config) != {"bin_dir"}
+                or not isinstance(config["bin_dir"], str)):
+            raise ValueError
+        location = config["bin_dir"]
+        base = Path.home() / location[2:] if location.startswith("~/") else Path(location)
+        if not base.is_absolute() or ".." in base.parts:
+            raise ValueError
+        executable, node = base / "pi", base / "node"
+        if any(not path.is_file() or not os.access(path, os.X_OK) for path in (executable, node)):
+            raise ValueError
+        entry = executable.resolve(strict=True)
+        sdk = entry.parent / "index.js"
         package = json.loads((entry.parent.parent / "package.json").read_text())
-        if package.get("name") != "@earendil-works/pi-coding-agent" or not sdk.is_file():
+        if (not isinstance(package, dict)
+                or package.get("name") != "@earendil-works/pi-coding-agent" or not sdk.is_file()):
             raise ValueError
     except (OSError, ValueError):
         raise ParseFailure("pi-runtime-unavailable") from None
-    return str(node), str(sdk)
+    return str(node.resolve()), str(sdk)
 
 
 def provider_environment():
