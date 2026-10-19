@@ -5,7 +5,8 @@
 The cron/service PATH blocker is now fixed **in code** with an explicit validated
 installed Node/Pi pin, proved by real subscription calls with system-only PATH
 and the actual listener environment, against primary cursors **read-only**.
-87 offline tests pass. No approved Digest external dispatcher exists; the exact
+93 offline tests pass, including the reconciled regressions from concurrent main
+commits. No approved Digest external dispatcher exists; the exact
 manual merge/install commands, guarded no-send installer, current supervisor-exit
 evidence and separate activation/historical-send approvals are documented.
 Chris chose Pi/Codex, not Claude authentication or historical catch-up.
@@ -218,7 +219,7 @@ After reviewed authorization:
 
 ## Shipping and deployment boundary
 
-Repository gate: `bash scripts/check.sh` — **73 Python + 14 Node tests pass**
+Repository gate: `bash scripts/check.sh` — **79 Python + 14 Node tests pass**
 (offline failure matrices, process
 concurrency, parser/state migration, atomic crash-window retries, bot safety,
 no-send end-to-end preview, syntax/compile and whitespace checks). Also run the

@@ -8,7 +8,9 @@
   records fresh real subscription proof with system-only PATH and the actual
   listener environment, against primary cursors read-only. The explicit reviewed
   `config/pi-runtime.json` Node/Pi pin resolves the prior PATH blocker in code;
-  no machine PATH edits are needed. 87 offline tests pass. No approved external
+  no machine PATH edits are needed. 93 offline tests pass, including the reconciled
+  regressions from concurrent main commits (legacy replay is explicitly rejected).
+  No approved external
   Digest dispatcher exists: human review/merge and a named external no-send
   installer are still needed. Production remains old code.
 

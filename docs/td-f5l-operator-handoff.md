@@ -3,7 +3,8 @@
 ## Delivery status — 2026-10-19 UTC
 
 **Repair and runtime-PATH fix are implemented/validated in the same PR #2;
-production is still `781d7af`, not repaired live.** PR #2 is open, ready for
+production still uses legacy Claude parsing (now `3aa7d14`), not this repair.**
+PR #2 is open, ready for
 review, targeting main, auto-merge disabled. No review/merge/install/activation
 has been performed by this worker. Historical catch-up remains unauthorized.
 
@@ -45,22 +46,26 @@ cursor read once **read-only in memory**, all 11 default sources:
 | --- | --- | --- |
 | 14:20:29 | `env -i`, HOME `/home/c2k`, **PATH `/usr/bin:/bin` only** | fixture + preview + advisory passed; 26.76s |
 | 14:22:28 | Nonsecret HOME/PATH/context from the actual running listener's Python process; Node prefix absent from PATH | same checks passed; 24.47s |
+| 14:33:00 | After rebasing/reconciling concurrent main, system-only PATH | fixture + preview + advisory passed; 27.68s |
 
-Each: **Pydantic AI and Pi summarized; nine sources unchanged**, exit 0,
-no fetch/parse failures, **zero Telegram requests and notifier constructions**.
+First two runs: Pydantic AI/Pi summarized, nine unchanged. The final run picked
+up a newly pending Codex update: **three summarized, eight unchanged**. All
+returned exit 0, no fetch/parse failures, **zero Telegram requests and notifier constructions**.
 Worktree runtime files and primary state/outbox/manifest/credentials/sessions/
 offsets/log fingerprints were unchanged. No provider transcripts, release text
 or credentials were persisted. Receipts (ignored, mode 0600):
 
 - `data/pi-codex-minimal-path-2026-10-19.json`
 - `data/pi-codex-live-unit-env-2026-10-19.json`
+- `data/pi-codex-rebased-minimal-path-2026-10-19.json`
 
 Nine unchanged cursors are not proof of historical delivery. The potentially
 swallowed-release inventory/provisional baseline in
 [the retained recovery handoff](td-f5l-handoff.md) is unchanged.
 
-Offline: **73 Python + 14 Node tests = 87 passing**. Five new runtime-discovery
-tests and ten new external-install safety tests supplement the retained ACK,
+Offline: **79 Python + 14 Node tests = 93 passing** (73 under `tests/`, six
+reconciled root regressions). Five new runtime-discovery tests and ten new
+external-install safety tests supplement the retained ACK,
 crash-window, concurrency, migration, failure and no-paid-fallback matrices.
 `bash scripts/check.sh` and the exact catalog compile gate pass. Real production
 installation via the new helper has **not** been executed; its apply path was
@@ -106,6 +111,23 @@ read -r -p 'Paste the exact reviewed PR2 head SHA: ' REVIEWED_HEAD
 [[ "$REVIEWED_HEAD" =~ ^[0-9a-f]{40}$ ]]
 read -r -p 'Recorded external no-send maintenance approval reference: ' APPROVAL
 [[ -n "$APPROVAL" ]]
+
+# Authorized external maintenance: prevent the legacy bot editing main while
+# the reviewed merge/install proceeds. Leaves everything paused on failure.
+/usr/bin/python3 - <<'PY'
+import os
+from scripts.external_operator_install import external_guard, run, paused_crontab, check_quiet, UNIT
+external_guard()
+cron = run(['crontab', '-l'])
+paused = paused_crontab(cron)
+if run(['crontab', '-l']) != cron:
+    raise SystemExit('Crontab changed; preserve and recheck')
+run(['crontab', '-'], input=paused)
+env = dict(os.environ, XDG_RUNTIME_DIR='/run/user/1000',
+           DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus')
+run(['systemctl', '--user', 'stop', UNIT], env=env)
+check_quiet(paused, env)
+PY
 
 # Manual maintainer merge, NOT auto-merge, NOT a worker command.
 gh api --method PUT repos/c2keesey/tech-digest/pulls/2/merge \
@@ -168,12 +190,43 @@ exit are separate observations; causation is not established. Future supervisor
 reuse must reconcile PR/unique work before moving refs. Infrastructure recovery
 is not a new corrective Digest implementation.
 
-Current continuation's initial/final protected baseline (not restore targets):
+## Concurrent main changes reconciled, not overwritten
 
-- Primary `state.json`: `ab2cb182e2fccb32acfe2f0681fbd37e1344311adee07a11ee2255c63cfeae95`
-- Beads manifest: `4e9630cb7dbb482b732d243c7938acd8e3ac77f65a045afad7651e1109122767`
-- Primary outbox absent at audit; preserve any later outbox, never delete it to retry.
+While this worker was running, **other activity advanced primary/remote main**
+from `781d7af` through `4083210` to `3aa7d14` (Oct 19 14:19 UTC). Only public
+`digest.py`/`test_digest.py` changed: bounded unparsed excerpts and a `--replay`
+path using legacy Claude parsing. PR #2 became conflicted. This is observed
+concurrent activity, not evidence of the supervisor-exit cause.
 
-Primary remains on `781d7af` with its dirty cursor/manifest and existing gate lock.
+The same retained feature was rebased onto the fetched current main. The
+conflict was resolved in favor of truthful Pi parse failures, ACK-only delivery
+and no replay/reset. Main's six root regression tests were adapted to preserve
+honesty/escaping/auth/failure coverage while explicitly asserting replay/reset
+are rejected before generation/send and failed parsing stays pending. The root
+tests are now in the repository gate. No unique main work was silently ignored;
+its original commits remain upstream and the policy conflict is explicit here.
+The feature push uses an exact lease on retained PR head `78f986f`, not a blind
+force push. Primary was never checked out/reset/edited by this worker.
+
+Protected evidence was preserved, **not restored to an older fingerprint**:
+
+- Primary state stayed `ab2cb182e2fccb32acfe2f0681fbd37e1344311adee07a11ee2255c63cfeae95`;
+  outbox remained absent and credentials/session/offset fingerprints unchanged.
+- Beads manifest changed concurrently from `4e9630cb7dbb482b732d243c7938acd8e3ac77f65a045afad7651e1109122767`
+  to `574ab9421dd1cfb2fe4a3f976456117ec155fba50232ba02cbdcbfc004583ef9`.
+- `logs/bot.log` gained **59 bytes**; the entire earlier content is a verified
+  unchanged prefix. Other fingerprinted logs were unchanged. No raw log content
+  was emitted. Exact writers of these concurrent file updates were not established.
+- A new untracked primary `.gc/` appeared and was left alone, as were existing
+  dirty state/manifest and gate-lock artifacts.
+
+The initial comparison correctly detected the concurrent updates; all three
+actual-provider runs each verified no protected-file changes **during that run**.
+This is not a false claim that all primary files stayed unchanged for the whole
+turn. Retain initial observations/receipts; do not reset any file to their hashes.
+Coordinate the external maintenance window to prevent concurrent writers; the
+installer checks quiescence/evidence and fails closed if they change.
+
+Primary is now `3aa7d14`, still legacy code; the Pi repair has not been installed.
 No worker merge, installation, service operation, cron change, send/reset,
 credential copy, recovery-baseline change or Agent Console deployment occurred.
