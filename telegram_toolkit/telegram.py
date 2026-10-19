@@ -37,9 +37,12 @@ class TelegramNotifier:
         if env_path.exists():
             with open(env_path) as f:
                 for line in f:
-                    if line.strip() and not line.startswith('#'):
-                        key, value = line.strip().split('=', 1)
-                        os.environ[key] = value.strip('\'"')
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' not in line:
+                            raise ValueError('Invalid environment configuration')
+                        key, value = line.split('=', 1)
+                        os.environ.setdefault(key.strip(), value.strip().strip('\'"'))
 
     def send(self, title: str, message: str, url: Optional[str] = None,
              silent: bool = False) -> bool:
@@ -73,11 +76,18 @@ class TelegramNotifier:
 
             response = requests.post(api_url, json=payload, timeout=10)
             response.raise_for_status()
-            print("Telegram notification sent")
+            body = response.json()
+            result = body.get('result') if isinstance(body, dict) else None
+            message_id = result.get('message_id') if isinstance(result, dict) else None
+            if (not isinstance(body, dict) or body.get('ok') is not True
+                    or type(message_id) is not int or message_id <= 0):
+                print("Telegram notification not acknowledged")
+                return False
+            print("Telegram notification acknowledged")
             return True
 
-        except requests.RequestException as e:
-            print(f"Telegram notification failed: {e}")
+        except (requests.RequestException, ValueError):
+            print("Telegram notification failed; delivery may be uncertain")
             return False
 
     def send_error(self, title: str, error_message: str) -> bool:
@@ -137,8 +147,8 @@ def setup_telegram_bot():
         else:
             print("Connection test failed")
             return False
-    except Exception as e:
-        print(f"Setup failed: {e}")
+    except Exception:
+        print("Setup failed; check configuration without publishing credentials")
         return False
 
 
