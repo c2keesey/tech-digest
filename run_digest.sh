@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Claude Code Morning Digest
+# Tech Morning Digest (Codex Sol summaries)
 # Run daily to send release notes summary via Telegram
 # Designed for cron automation with logging
 
@@ -16,7 +16,7 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
-log "Starting Claude Code digest..."
+log "Starting tech digest (Codex Sol low)..."
 
 # Change to script directory
 cd "$SCRIPT_DIR"
@@ -59,7 +59,7 @@ else
     if [ ! -z "$TELEGRAM_BOT_TOKEN" ] && [ ! -z "$TELEGRAM_CHAT_ID" ]; then
         curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d chat_id="$TELEGRAM_CHAT_ID" \
-            -d text="⚠️ Claude Code Digest failed with exit code $EXIT_CODE" \
+            -d text="⚠️ Tech Digest failed with exit code $EXIT_CODE" \
             -d parse_mode="Markdown" > /dev/null 2>&1
     fi
 fi
