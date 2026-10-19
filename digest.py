@@ -7,6 +7,7 @@ morning digest via Telegram. Uses Claude to parse and categorize changes.
 """
 
 import json
+import re
 import subprocess
 import shutil
 from pathlib import Path
@@ -109,7 +110,7 @@ def parse_with_claude(content: str, timeout: int = 120) -> Optional[dict]:
         )
 
         if result.returncode != 0:
-            print(f"Claude parse failed: {result.stderr}")
+            print(f"Claude parse failed (exit {result.returncode}); using release-note fallback")
             return None
 
         output = result.stdout.strip()
@@ -120,7 +121,11 @@ def parse_with_claude(content: str, timeout: int = 120) -> Optional[dict]:
             lines = [l for l in lines if not l.startswith("```")]
             output = "\n".join(lines)
 
-        return json.loads(output)
+        parsed = json.loads(output)
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("summary"), str):
+            print("Claude returned an invalid summary; using release-note fallback")
+            return None
+        return parsed
 
     except json.JSONDecodeError as e:
         print(f"Failed to parse JSON: {e}")
@@ -138,7 +143,23 @@ def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
     lines = [f"▎<b>{escape_html(data.source_name)}</b>"]
 
     if not parsed:
-        lines.append("<i>No recent updates</i>")
+        lines.append("<i>AI summary unavailable — excerpts from release notes</i>")
+        if data.versions:
+            lines.append(escape_html(", ".join(data.versions[:3])))
+        excerpts = []
+        for raw_line in data.content.splitlines():
+            text = re.sub(r"^[\s#*>+\-]+", "", raw_line).strip()
+            # Skip headings, link-only lines, and empty formatting.
+            if len(text) < 20 or text.startswith(("http://", "https://")):
+                continue
+            if text in excerpts:
+                continue
+            excerpts.append(text)
+            if len(excerpts) == 5:
+                break
+        for text in excerpts:
+            lines.append("  • " + escape_html(text[:177] + "..." if len(text) > 180 else text))
+        lines.append(f'\n  <a href="{escape_html(data.url)}">View changelog →</a>')
         return "\n".join(lines)
 
     # Summary line
