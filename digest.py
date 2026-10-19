@@ -209,7 +209,7 @@ def format_source_section(data: ReleaseData, parsed: Optional[dict]) -> str:
     return "\n".join(lines)
 
 
-def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str, dict]:
+def generate_digest(sources: list[str] = None, quiet: bool = False, replay: bool = False) -> tuple[str, dict]:
     """
     Generate digest for multiple sources using version tracking.
 
@@ -236,7 +236,7 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
         if not quiet:
             print(f"Fetching {source_key}...")
 
-        source_state = state.get(source_key, {})
+        source_state = {} if replay else state.get(source_key, {})
         seen_versions = set(source_state.get("seen_versions", []))
         last_hash = source_state.get("content_hash", "")
         last_anchor = source_state.get("content_anchor", "")
@@ -283,7 +283,7 @@ def generate_digest(sources: list[str] = None, quiet: bool = False) -> tuple[str
     return digest_text, new_state
 
 
-def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
+def send_digest(sources: list[str] = None, quiet: bool = False, replay: bool = False) -> bool:
     """
     Generate and send digest via Telegram. Saves state on success.
 
@@ -294,7 +294,7 @@ def send_digest(sources: list[str] = None, quiet: bool = False) -> bool:
     Returns:
         True if successful
     """
-    digest, new_state = generate_digest(sources=sources, quiet=quiet)
+    digest, new_state = generate_digest(sources=sources, quiet=quiet, replay=replay)
 
     if not quiet:
         print("\n--- Digest Preview ---")
@@ -382,6 +382,7 @@ def main():
         print()
         print("Options:")
         print("  --preview        Show digest without sending to Telegram")
+        print("  --replay         Resend recent releases, ignoring previously seen markers")
         print("  --sources X,Y,Z  Comma-separated list of sources to include")
         print("  --list           List available sources")
         print("  --show-state     Show current version tracking state")
@@ -392,11 +393,11 @@ def main():
         return
 
     if preview_only:
-        digest, new_state = generate_digest(sources=sources)
+        digest, new_state = generate_digest(sources=sources, replay="--replay" in sys.argv)
         print(digest)
         # Preview doesn't save state
     else:
-        success = send_digest(sources=sources)
+        success = send_digest(sources=sources, replay="--replay" in sys.argv)
         sys.exit(0 if success else 1)
 
 
