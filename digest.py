@@ -3,7 +3,7 @@
 Tech Release Digest
 
 Fetches release notes from multiple sources and sends a formatted
-morning digest via Telegram. Uses Codex Sol (low reasoning) to summarize changes.
+morning digest via Telegram. Uses Codex Luna (low reasoning) to summarize changes.
 """
 
 import json
@@ -65,7 +65,7 @@ def escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-SUMMARY_MODEL = "gpt-6.1-sol"
+SUMMARY_MODEL = "gpt-6-luna"
 SUMMARY_REASONING = "low"
 
 
@@ -251,7 +251,7 @@ def generate_digest(sources: list[str] = None, quiet: bool = False, replay: bool
             continue
 
         if not quiet:
-            print(f"  Summarizing with Codex Sol ({SUMMARY_REASONING})...")
+            print(f"  Summarizing with Codex Luna ({SUMMARY_REASONING})...")
 
         parsed = parse_with_codex(data.content)
         section = format_source_section(data, parsed)

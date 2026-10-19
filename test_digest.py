@@ -52,14 +52,14 @@ class DigestFallbackTests(unittest.TestCase):
 
     @patch.object(digest, "find_summary_executable", return_value="/bin/pi")
     @patch.object(digest.subprocess, "run")
-    def test_sol_low_command_and_final_output(self, run, _find):
+    def test_luna_low_command_and_final_output(self, run, _find):
         expected = {"summary": "v2.0 • Faster editing", "categories": {"New Features": ["Fast editing"]}}
         run.return_value = subprocess.CompletedProcess([], 0, json.dumps(expected), "")
         with patch.dict(digest.subprocess.os.environ, {"TELEGRAM_BOT_TOKEN": "not-a-real-secret"}):
             self.assertEqual(digest.parse_with_codex("release notes"), expected)
         cmd = run.call_args.args[0]
         self.assertEqual(cmd[cmd.index("--provider") + 1], "openai-codex")
-        self.assertEqual(cmd[cmd.index("--model") + 1], "gpt-6.1-sol")
+        self.assertEqual(cmd[cmd.index("--model") + 1], "gpt-6-luna")
         self.assertEqual(cmd[cmd.index("--thinking") + 1], "low")
         for flag in ["--no-session", "--no-tools", "--no-extensions", "--no-context-files"]:
             self.assertIn(flag, cmd)

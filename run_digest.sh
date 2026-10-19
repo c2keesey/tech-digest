@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Tech Morning Digest (Codex Sol summaries)
+# Tech Morning Digest (Codex Luna summaries)
 # Run daily to send release notes summary via Telegram
 # Designed for cron automation with logging
 
@@ -16,7 +16,7 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
-log "Starting tech digest (Codex Sol low)..."
+log "Starting tech digest (Codex Luna low)..."
 
 # Change to script directory
 cd "$SCRIPT_DIR"
