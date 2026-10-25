@@ -54,11 +54,6 @@ GITHUB_SOURCES = {
         "name": "Beads",
         "url": "https://github.com/steveyegge/beads/releases",
     },
-    "gas-city": {
-        "repo": "gastownhall/gascity",
-        "name": "Gas City",
-        "url": "https://github.com/gastownhall/gascity/releases",
-    },
     "codex": {
         "repo": "openai/codex",
         "name": "Codex CLI",
